@@ -1,5 +1,6 @@
 import numpy as np
 import random as rd
+from sklearn.cluster import AgglomerativeClustering as AggCl
 
 
 def random_pref_table(no_classes, no_people):
@@ -68,28 +69,31 @@ def cooccurence_matrix_to_data_recursive(no_classes, no_people, cooccurrence_mat
 
 def main():
     no_classes = 5
-    no_people = 40
-    '''
+    no_people = 10
+
     rand_cooccurrence_matrix = random_cooccurence_matrix(no_classes)
     #print(rand_cooccurrence_matrix)
-    pref_table = cooccurence_matrix_to_data(no_classes, no_people, rand_cooccurrence_matrix)
 
-    print(pref_table)
+    pref_table = cooccurence_matrix_to_data(no_classes, no_people, rand_cooccurrence_matrix)
     np.save('prefs', pref_table)
-    '''
-    pref_table = np.load('prefs.npy')
-    rand_pref_table = random_pref_table(no_classes, no_people)
+
+    # pref_table = np.load('prefs.npy')
+    # rand_pref_table = random_pref_table(no_classes, no_people)
     cooccurrence_matrix = data_to_cooccurence_matrix(pref_table)
 
-    print(np.corrcoef(pref_table.T))
+    print(pref_table)
+    print('Coefs: \n', np.corrcoef(pref_table.T))
+    print('Coocc: \n', cooccurrence_matrix)
 
-    print(cooccurrence_matrix)
+
+    model = AggCl(2)
+    model.fit_predict(pref_table.T)
+    print(model.labels_)
 
     np_occ = np.array(cooccurrence_matrix)
-
     np_avg = (np_occ + np.transpose(np_occ)) / 2
 
-    print(np_avg)
+    # print(np_avg)
 
 
 if __name__ == '__main__':

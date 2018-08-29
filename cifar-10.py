@@ -33,7 +33,7 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
         optim_r.zero_grad()
         output_root, layer = models[0](data)
         root_loss = loss_r(output_root, root_labels)
-        root_loss.backward()
+        root_loss.backward(retain_graph=True)
         optim_r.step()
 
         # Seperate data and labels into 2 according to the classification done in the root
@@ -41,27 +41,28 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
         b2_data = torch.empty(0, 16, 8, 8)
         b1_labels = torch.empty(0, dtype=torch.long)
         b2_labels = torch.empty(0, dtype=torch.long)
-        root_probabilities = torch.exp(output_root)
-        for i in range(root_probabilities.size(0)):
-            if root_probabilities[i][0] >= root_probabilities[i][1]:
+        # root_probabilities = torch.exp(output_root)
+        # print(root_labels[0].item())
+        for i in range(output_root.size(0)):
+            if root_labels[i].item() == 0: # root_probabilities[i][0] >= root_probabilities[i][1]:
                 b1_data = torch.cat((b1_data, layer[i:i+1]))
                 b1_labels = torch.cat((b1_labels, labels[i:i+1]))
             else:
                 b2_data = torch.cat((b2_data, layer[i:i+1]))
-                b2_labels = torch.cat((b2_labels, labels[i:i+1]))
+                b2_labels = torch.cat((b2_labels, labels[i:i+1] - 5))
 
-
+        '''
         print(b1_data.shape)
         print(b2_data.shape)
         print(b1_labels.shape)
         print(b2_labels.shape)
-
+        '''
 
         if b1_data.size(0):
             optim_b1.zero_grad()
             output_b1, _ = models[1](b1_data)
             b1_loss = loss_b1(output_b1, b1_labels)      ## more class labels than output options
-            b1_loss.backward()
+            b1_loss.backward(retain_graph=True)
             optim_b1.step()
         if b2_data.size(0):
             optim_b2.zero_grad()
@@ -71,34 +72,74 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
             optim_b2.step()
 
         if batch_idx % args.log_interval == 0:
-            # print(layer.shape)
-            # print(output_root.shape)
-            # print(root_labels)
-            # print(torch.exp(output_root))
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tRoot Loss: {:.6f}\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), root_loss.item(), b1_loss.item(), b2_loss.item()))
 
 
-def test_tree(models, test_loader, device):
-    return
-    model.eval()
-    loss = torch.nn.CrossEntropyLoss(size_average=False)
-    loss.to(device)
+def test_tree(models, test_loader, device, LongTensor):
+    models[0].eval()
+    models[1].eval()
+    models[2].eval()
+
+    loss_b1 = torch.nn.NLLLoss()
+    loss_b2 = torch.nn.NLLLoss()
+    loss_b1.to(device)
+    loss_b2.to(device)
 
     test_loss = 0
-    correct = 0
+    correct_root = 0
+    correct_b1 = 0
+    correct_b2 = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        output = model(data)
-        test_loss += loss(output, labels).item()
-        pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
-        correct += pred.eq(labels.view_as(pred)).sum().item()
+
+        output_root, layer = models[0](data)
+
+        # Seperate data and labels into 2 according to the classification done in the root
+        b1_data = torch.empty(0, 16, 8, 8)
+        b2_data = torch.empty(0, 16, 8, 8)
+        b1_labels = torch.empty(0, dtype=torch.long)
+        b2_labels = torch.empty(0, dtype=torch.long)
+        root_probabilities = torch.exp(output_root)
+        root_labels = labels / LongTensor((np.ones(labels.size(0)) * 5))
+        pred_root = root_probabilities.max(1, keepdim=True)[1]
+        correct_root += pred_root.eq(root_labels.view_as(pred_root)).sum().item()
+        for i in range(output_root.size(0)):
+            if root_probabilities[i][0] >= root_probabilities[i][1]:
+                b1_data = torch.cat((b1_data, layer[i:i + 1]))
+                b1_labels = torch.cat((b1_labels, labels[i:i + 1]))
+            else:
+                b2_data = torch.cat((b2_data, layer[i:i + 1]))
+                b2_labels = torch.cat((b2_labels, labels[i:i + 1] - 5))
+
+        if b1_data.size(0):
+            output_b1, _ = models[1](b1_data)
+            # b1_loss = loss_b1(output_b1, b1_labels)
+            # print(output_b1)
+            # print(output_b1.max(1, keepdim=True)[1])
+            # print(b1_labels)
+            pred = output_b1.max(1, keepdim=True)[1]
+            correct_b1 += pred.eq(b1_labels.view_as(pred)).sum().item()
+        if b2_data.size(0):
+            output_b2, _ = models[2](b2_data)
+            # b2_loss = loss_b2(output_b2, b2_labels)
+            pred = output_b2.max(1, keepdim=True)[1]
+            correct_b2 += pred.eq(b2_labels.view_as(pred)).sum().item()
+
+        # output = model(data)
+        # test_loss += loss(output, labels).item()
+        # pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
+        # correct += pred.eq(labels.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%), Root Accuracy: {}/{} ({:.0f}%), Corrects: {}, {}\n'.format(
+        (correct_b1 + correct_b2), len(test_loader.dataset),
+        100. * (correct_b1 + correct_b2) / len(test_loader.dataset),
+        correct_root, len(test_loader.dataset),
+        100. * correct_root / len(test_loader.dataset),
+        correct_b1, correct_b2
+    ))
 
 
 
@@ -146,6 +187,7 @@ def test(model, test_loader, device):
 
 
 def main():
+    train = 0
     batch_size = 64
     test_batch_size = 1000
     epochs = 20
@@ -184,13 +226,23 @@ def main():
     '''
 
     models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
-
     LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
-    for epoch in range(1, args.epochs + 1):
-        train_tree(models, train_loader, device, epoch, args, LongTensor)
-        #test_tree(models, test_loader, device)
+    if train:
+        for epoch in range(1, args.epochs + 1):
+            train_tree(models, train_loader, device, epoch, args, LongTensor)
+            # test_tree(models, test_loader, device)
 
+        torch.save(models[0].state_dict(), './saved/root.pth')
+        torch.save(models[1].state_dict(), './saved/branch1.pth')
+        torch.save(models[2].state_dict(), './saved/branch2.pth')
+
+    if not train:
+        models[0].load_state_dict(torch.load('./saved/root.pth'))
+        models[1].load_state_dict(torch.load('./saved/branch1.pth'))
+        models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+
+        test_tree(models, test_loader, device, LongTensor)
 
 
 if __name__ == '__main__':

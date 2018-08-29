@@ -26,7 +26,7 @@ class TreeRootNet(nn.Module):
 
 
 class TreeBranchNet(nn.Module):
-    def __init__(self, branch=10):
+    def __init__(self, branch=5):
         super(TreeBranchNet, self).__init__()
 
         self.conv1 = nn.Conv2d(16, 32, 3, padding=1)
