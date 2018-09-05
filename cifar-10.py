@@ -37,10 +37,10 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
         optim_r.step()
 
         # Seperate data and labels into 2 according to the classification done in the root
-        b1_data = torch.empty(0, 16, 8, 8)
-        b2_data = torch.empty(0, 16, 8, 8)
-        b1_labels = torch.empty(0, dtype=torch.long)
-        b2_labels = torch.empty(0, dtype=torch.long)
+        b1_data = torch.empty((0, 16, 8, 8), device=device)
+        b2_data = torch.empty((0, 16, 8, 8), device=device)
+        b1_labels = torch.empty(0, dtype=torch.long, device=device)
+        b2_labels = torch.empty(0, dtype=torch.long, device=device)
         # root_probabilities = torch.exp(output_root)
         # print(root_labels[0].item())
         for i in range(output_root.size(0)):
@@ -97,10 +97,10 @@ def test_tree(models, test_loader, device, LongTensor):
         output_root, layer = models[0](data)
 
         # Seperate data and labels into 2 according to the classification done in the root
-        b1_data = torch.empty(0, 16, 8, 8)
-        b2_data = torch.empty(0, 16, 8, 8)
-        b1_labels = torch.empty(0, dtype=torch.long)
-        b2_labels = torch.empty(0, dtype=torch.long)
+        b1_data = torch.empty((0, 16, 8, 8), device=device)
+        b2_data = torch.empty((0, 16, 8, 8), device=device)
+        b1_labels = torch.empty(0, dtype=torch.long, device=device)
+        b2_labels = torch.empty(0, dtype=torch.long, device=device)
         root_probabilities = torch.exp(output_root)
         root_labels = labels / LongTensor((np.ones(labels.size(0)) * 5))
         pred_root = root_probabilities.max(1, keepdim=True)[1]
@@ -187,7 +187,7 @@ def test(model, test_loader, device):
 
 
 def main():
-    train = 0
+    test = False
     batch_size = 64
     test_batch_size = 1000
     epochs = 20
@@ -195,6 +195,7 @@ def main():
     resume = 0
 
     parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
+    parser.add_argument('--test', action='store_true', help='enables test mode')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=epochs, metavar='N', help='number of epochs to train (default: 10)')
@@ -204,16 +205,18 @@ def main():
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
+    test = args.test
+
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
     train_data_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
-        transforms.RandomAffine(45, (0.2, 0.2))
+        transforms.RandomAffine(45, (0.2, 0.2)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     ])
     test_data_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -235,7 +238,7 @@ def main():
     models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
     LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
-    if train:
+    if not test:
         for epoch in range(1, args.epochs + 1):
             train_tree(models, train_loader, device, epoch, args, LongTensor)
             # test_tree(models, test_loader, device)
@@ -244,7 +247,7 @@ def main():
         torch.save(models[1].state_dict(), './saved/branch1.pth')
         torch.save(models[2].state_dict(), './saved/branch2.pth')
 
-    if not train:
+    if test:
         models[0].load_state_dict(torch.load('./saved/root.pth'))
         models[1].load_state_dict(torch.load('./saved/branch1.pth'))
         models[2].load_state_dict(torch.load('./saved/branch2.pth'))
