@@ -1,6 +1,12 @@
 import numpy as np
 import random as rd
 from sklearn.cluster import AgglomerativeClustering as AggCl
+from scipy.cluster.hierarchy import linkage, dendrogram, cophenet
+from scipy.spatial.distance import pdist
+
+import matplotlib
+matplotlib.use("TkAgg")
+from matplotlib import pyplot as plt
 
 
 def random_pref_table(no_classes, no_people):
@@ -71,27 +77,52 @@ def main():
     no_classes = 5
     no_people = 10
 
+
     rand_cooccurrence_matrix = random_cooccurence_matrix(no_classes)
     #print(rand_cooccurrence_matrix)
 
     pref_table = cooccurence_matrix_to_data(no_classes, no_people, rand_cooccurrence_matrix)
     np.save('prefs', pref_table)
 
+
     # pref_table = np.load('prefs.npy')
+
     # rand_pref_table = random_pref_table(no_classes, no_people)
-    cooccurrence_matrix = data_to_cooccurence_matrix(pref_table)
+    # cooccurrence_matrix = data_to_cooccurence_matrix(pref_table)
 
-    print(pref_table)
-    print('Coefs: \n', np.corrcoef(pref_table.T))
-    print('Coocc: \n', cooccurrence_matrix)
+    print('Priority Table: \n', pref_table.T)
+    print('Correlations: \n', np.corrcoef(pref_table.T))
+    # print('Coocc: \n', cooccurrence_matrix)
 
+    # Scipy Hierarchical Clustering
+    Z = linkage(pref_table.T, 'ward')
+    c, coph_dists = cophenet(Z, pdist(pref_table.T))
+    print('Linkage: \n', Z)
+    print('Cophenetic Correlation Coefficient: ',c)
 
+    # Agglomerative Clustering
+    print("\nAgglomerative Clustering")
     model = AggCl(2)
     model.fit_predict(pref_table.T)
     print(model.labels_)
+    model = AggCl(3)
+    model.fit_predict(pref_table.T)
+    print(model.labels_)
+    model = AggCl(4)
+    model.fit_predict(pref_table.T)
+    print(model.labels_)
+    model = AggCl(5)
+    model.fit_predict(pref_table.T)
+    print(model.labels_)
 
-    np_occ = np.array(cooccurrence_matrix)
-    np_avg = (np_occ + np.transpose(np_occ)) / 2
+    plt.title('Hierarchical Clustering Dendrogram')
+    plt.xlabel('sample index')
+    plt.ylabel('distance')
+    dendrogram(Z)
+    plt.show()
+
+    # np_occ = np.array(cooccurrence_matrix)
+    # np_avg = (np_occ + np.transpose(np_occ)) / 2
 
     # print(np_avg)
 

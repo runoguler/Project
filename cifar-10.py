@@ -208,12 +208,19 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
-    data_transform = transforms.Compose([
+    train_data_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+        transforms.RandomHorizontalFlip(0.4),
+        transforms.RandomRotation(20),
+        transforms.RandomAffine(45, (0.2, 0.2))
     ])
-    cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=data_transform, download=True)
-    cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=data_transform)
+    test_data_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
+    cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
+    cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=test_data_transform)
     train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
     test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
