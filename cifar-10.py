@@ -14,9 +14,9 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
     models[1].train()
     models[2].train()
 
-    loss_r = torch.nn.NLLLoss()
-    loss_b1 = torch.nn.NLLLoss()
-    loss_b2 = torch.nn.NLLLoss()
+    loss_r = torch.nn.CrossEntropyLoss()
+    loss_b1 = torch.nn.CrossEntropyLoss()
+    loss_b2 = torch.nn.CrossEntropyLoss()
     loss_r.to(device)
     loss_b1.to(device)
     loss_b2.to(device)
@@ -187,7 +187,6 @@ def test(model, test_loader, device):
 
 
 def main():
-    test = False
     batch_size = 64
     test_batch_size = 1000
     epochs = 20
@@ -206,6 +205,7 @@ def main():
     args = parser.parse_args()
 
     test = args.test
+    # test = True
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -241,7 +241,7 @@ def main():
     if not test:
         for epoch in range(1, args.epochs + 1):
             train_tree(models, train_loader, device, epoch, args, LongTensor)
-            # test_tree(models, test_loader, device)
+            test_tree(models, test_loader, device, LongTensor)
 
         torch.save(models[0].state_dict(), './saved/root.pth')
         torch.save(models[1].state_dict(), './saved/branch1.pth')

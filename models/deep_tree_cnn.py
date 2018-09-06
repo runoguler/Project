@@ -22,7 +22,7 @@ class TreeRootNet(nn.Module):
         out = F.max_pool2d(F.relu(self.bn2(self.conv2(out))), 2)
         result = out.view(-1, 16 * 8 * 8)
         result = self.l2(self.l1(result))
-        return F.log_softmax(result, dim=1), out
+        return result, out
 
 
 class TreeBranchNet(nn.Module):
@@ -43,4 +43,4 @@ class TreeBranchNet(nn.Module):
         out = F.max_pool2d(F.relu(self.bn2(self.conv2(out))), 2)
         result = out.view(-1, 64 * 2 * 2)
         result = self.l2(self.l1(result))
-        return F.log_softmax(result, dim=1), out
+        return result, out
