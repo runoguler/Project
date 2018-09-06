@@ -116,7 +116,7 @@ def test_tree(models, test_loader, device, LongTensor):
     ))
 
 
-def train(model, train_loader, device, epoch, args):
+def train_net(model, train_loader, device, epoch, args):
     model.train()
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
@@ -138,7 +138,7 @@ def train(model, train_loader, device, epoch, args):
                 100. * batch_idx / len(train_loader), train_loss.item()))
 
 
-def test(model, test_loader, device):
+def test_net(model, test_loader, device):
     model.eval()
     loss = torch.nn.CrossEntropyLoss(size_average=False)
     loss.to(device)
@@ -214,8 +214,8 @@ def main():
             if resume:
                 model.load_state_dict(torch.load('./saved/simplenet.pth'))
             for epoch in range(1, args.epochs + 1):
-                train(model, train_loader, device, epoch, args)
-                test(model, test_loader, device)
+                train_net(model, train_loader, device, epoch, args)
+                test_net(model, test_loader, device)
             torch.save(model.state_dict(), './saved/simplenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/simplenet.pth'))
