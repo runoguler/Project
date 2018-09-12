@@ -12,51 +12,48 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
     models[1].train()
     models[2].train()
 
-    # loss_b1 = torch.nn.MSELoss()
-    # loss_b2 = torch.nn.MSELoss()
-    # loss_b1.to(device)
-    # loss_b2.to(device)
+    loss_b1 = torch.nn.MSELoss()
+    loss_b2 = torch.nn.MSELoss()
+    loss_b1.to(device)
+    loss_b2.to(device)
 
-    loss = torch.nn.CrossEntropyLoss()
-    loss.to(device)
+    # loss = torch.nn.CrossEntropyLoss()
+    # loss.to(device)
 
-    # optim_b1 = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()), lr=args.lr, betas=(0.5, 0.999))
-    # optim_b2 = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
-    optim = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
+    optim_b1 = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()), lr=args.lr, betas=(0.5, 0.999))
+    optim_b2 = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
+    # optim = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        # optim_b1.zero_grad()
-        # optim_b2.zero_grad()
-        optim.zero_grad()
+        optim_b1.zero_grad()
+        optim_b2.zero_grad()
+        # optim.zero_grad()
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
         out_b2, _ = models[2](layer)
 
-        out = torch.cat((out_b1, out_b2), dim=1)
+        # out = torch.cat((out_b1, out_b2), dim=1)
 
-        l = loss(out, labels)
-        l.backward()
-        optim.step()
+        # l = loss(out, labels)
+        # l.backward()
+        # optim.step()
 
 
-        '''
-        b1_labels = torch.empty((0, 5), dtype=torch.long, device=device)
-        b2_labels = torch.empty((0, 5), dtype=torch.long, device=device)
+        b1_labels = torch.zeros((labels.size(0), 5), device=device)
+        b2_labels = torch.zeros((labels.size(0), 5), device=device)
 
         for i in range(labels.size(0)):
             if labels[i].item() < 5:
-                b1_labels = torch.cat((b1_labels, labels[i:i + 1]))
-                b2_labels = torch.cat((b2_labels, labels[i:i + 1] - 5))
+                b1_labels[i][labels[i].item()] = 1
             else:
-                b1_labels = torch.cat((b1_labels, labels[i:i + 1]))
-                b2_labels = torch.cat((b2_labels, labels[i:i + 1] - 5))
+                b2_labels[i][labels[i].item()-5] = 1
 
 
         b1_loss = loss_b1(out_b1, b1_labels)
-        b1_loss.backward()  ## retain_graph=True
+        b1_loss.backward(retain_graph=True)  ## retain_graph=True
         optim_b1.step()
 
 
@@ -69,12 +66,12 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), b1_loss.item(), b2_loss.item()))
-        '''
 
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader), l.item(), ))
+
+        # if batch_idx % args.log_interval == 0:
+        #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+        #         epoch, batch_idx * len(data), len(train_loader.dataset),
+        #                100. * batch_idx / len(train_loader), l.item(), ))
 
 
 def test_tree(models, test_loader, device, LongTensor):
@@ -94,6 +91,15 @@ def test_tree(models, test_loader, device, LongTensor):
         out_b2, _ = models[2](layer)
 
         out = torch.cat((out_b1, out_b2), dim=1)
+
+        # b1_labels = torch.zeros((labels.size(0), 5), device=device)
+        # b2_labels = torch.zeros((labels.size(0), 5), device=device)
+        #
+        # for i in range(labels.size(0)):
+        #     if labels[i].item() < 5:
+        #         b1_labels[i][labels[i].item()] = 1
+        #     else:
+        #         b2_labels[i][labels[i].item() - 5] = 1
 
         pred = out.max(1, keepdim=True)[1]
         corrects += pred.eq(labels.view_as(pred)).sum().item()

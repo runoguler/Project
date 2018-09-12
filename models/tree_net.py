@@ -8,10 +8,10 @@ class TreeRootNet(nn.Module):
     def __init__(self):
         super(TreeRootNet, self).__init__()
 
-        self.conv1 = nn.Conv2d(3, 8, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(8)
-        self.conv2 = nn.Conv2d(8, 16, 3, padding=1)
-        self.bn2 = nn.BatchNorm2d(16)
+        self.conv1 = nn.Conv2d(3, 32, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 32, 3, padding=1)
+        self.bn2 = nn.BatchNorm2d(32)
 
     def forward(self, x):
         out = F.max_pool2d(F.relu(self.bn1(self.conv1(x))), 2)
@@ -23,9 +23,9 @@ class TreeBranchNet(nn.Module):
     def __init__(self, branch=5):
         super(TreeBranchNet, self).__init__()
 
-        self.conv1 = nn.Conv2d(16, 32, 3, padding=1)
-        self.bn1 = nn.BatchNorm2d(32)
-        self.conv2 = nn.Conv2d(32, 64, 3, padding=1)
+        self.conv1 = nn.Conv2d(32, 64, 3, padding=1)
+        self.bn1 = nn.BatchNorm2d(64)
+        self.conv2 = nn.Conv2d(64, 64, 3, padding=1)
         self.bn2 = nn.BatchNorm2d(64)
 
         self.l1 = nn.Linear(64 * 2 * 2, 32)
