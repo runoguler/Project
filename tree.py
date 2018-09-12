@@ -133,7 +133,7 @@ def train_net(model, train_loader, device, epoch, args):
         data, labels = data.to(device), labels.to(device)
 
         optim.zero_grad()
-        output = model(data)
+        output, _ = model(data)
         train_loss = loss(output, labels)
         train_loss.backward()
         optim.step()
@@ -153,7 +153,7 @@ def test_net(model, test_loader, device):
     correct = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        output = model(data)
+        output, _ = model(data)
         test_loss += loss(output, labels).item()
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
         correct += pred.eq(labels.view_as(pred)).sum().item()
