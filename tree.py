@@ -111,9 +111,9 @@ def test_tree(models, test_loader, device, LongTensor):
                     both_class += 1
                     if (labels[i].item() == (pred_b2[i].item() + 5)) or (labels[i].item() == pred_b1[i].item()):
                         correct_from_both += 1
-                        if (out_b1[pred_b1[i]] > out_b2[pred_b2[i]]) and (labels[i].item() == pred_b1[i].item()):
+                        if (out_b1[pred_b1[i].item()].item() > out_b2[pred_b2[i].item()].item()) and (labels[i].item() == pred_b1[i].item()):
                             max_correct_from_both += 1
-                        elif (out_b2[pred_b2[i]] > out_b1[pred_b1[i]]) and (labels[i].item() == (pred_b2[i].item() + 5)):
+                        elif (out_b2[pred_b2[i].item()].item() > out_b1[pred_b1[i].item()].item()) and (labels[i].item() == (pred_b2[i].item() + 5)):
                             max_correct_from_both += 1
 
 
