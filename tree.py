@@ -12,44 +12,38 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
     models[1].train()
     models[2].train()
 
-    loss_b1 = torch.nn.MSELoss()
-    loss_b2 = torch.nn.MSELoss()
+    loss_b1 = torch.nn.CrossEntropyLoss()
+    loss_b2 = torch.nn.CrossEntropyLoss()
     loss_b1.to(device)
     loss_b2.to(device)
 
-    # loss = torch.nn.CrossEntropyLoss()
-    # loss.to(device)
-
     optim_b1 = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()), lr=args.lr, betas=(0.5, 0.999))
     optim_b2 = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
-    # optim = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr, betas=(0.5, 0.999))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
         optim_b1.zero_grad()
         optim_b2.zero_grad()
-        # optim.zero_grad()
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
         out_b2, _ = models[2](layer)
 
-        # out = torch.cat((out_b1, out_b2), dim=1)
+        b1_labels = labels.clone()
+        b2_labels = labels.clone() - 5
 
-        # l = loss(out, labels)
-        # l.backward()
-        # optim.step()
+        b1_labels[b1_labels > 4] = 5
+        b2_labels[b2_labels < 0] = 5
 
-
-        b1_labels = torch.zeros((labels.size(0), 5), device=device)
-        b2_labels = torch.zeros((labels.size(0), 5), device=device)
-
-        for i in range(labels.size(0)):
-            if labels[i].item() < 5:
-                b1_labels[i][labels[i].item()] = 1
-            else:
-                b2_labels[i][labels[i].item()-5] = 1
+        # b1_labels = torch.zeros((labels.size(0), 5), device=device)
+        # b2_labels = torch.zeros((labels.size(0), 5), device=device)
+        #
+        # for i in range(labels.size(0)):
+        #     if labels[i].item() < 5:
+        #         b1_labels[i][labels[i].item()] = 1
+        #     else:
+        #         b2_labels[i][labels[i].item()-5] = 1
 
 
         b1_loss = loss_b1(out_b1, b1_labels)
@@ -82,6 +76,9 @@ def test_tree(models, test_loader, device, LongTensor):
     # correct_b1 = 0
     # correct_b2 = 0
     corrects = 0
+    no_class = 0
+    both_class = 0
+    false_in_class = 0
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
@@ -90,36 +87,42 @@ def test_tree(models, test_loader, device, LongTensor):
         out_b1, _ = models[1](layer)
         out_b2, _ = models[2](layer)
 
-        out = torch.cat((out_b1, out_b2), dim=1)
+        pred_b1 = out_b1.max(1, keepdim=True)[1]
+        pred_b2 = out_b2.max(1, keepdim=True)[1]
 
-        # b1_labels = torch.zeros((labels.size(0), 5), device=device)
-        # b2_labels = torch.zeros((labels.size(0), 5), device=device)
-        #
-        # for i in range(labels.size(0)):
-        #     if labels[i].item() < 5:
-        #         b1_labels[i][labels[i].item()] = 1
-        #     else:
-        #         b2_labels[i][labels[i].item() - 5] = 1
+        for i in range(labels.size(0)):
+            if pred_b1[i] == 5:
+                if pred_b2[i] == 5:
+                    no_class += 1
+                else:
+                    if labels[i].item() == (pred_b2[i].item() + 5):
+                        corrects += 1
+                    else:
+                        false_in_class += 1
+            else:
+                if pred_b2[i] == 5:
+                    if labels[i].item() == pred_b1[i].item():
+                        corrects += 1
+                    else:
+                        false_in_class += 1
+                else:
+                    both_class += 1
 
-        pred = out.max(1, keepdim=True)[1]
-        corrects += pred.eq(labels.view_as(pred)).sum().item()
+        # out = torch.cat((out_b1, out_b2), dim=1)
 
-        # pred = out_b1.max(1, keepdim=True)[1]
-        # correct_b1 += pred.eq(b1_labels.view_as(pred)).sum().item()
-        #
-        # pred = out_b2.max(1, keepdim=True)[1]
-        # correct_b1 += pred.eq(b1_labels.view_as(pred)).sum().item()
+        # pred = out.max(1, keepdim=True)[1]
+        # corrects += pred.eq(labels.view_as(pred)).sum().item()
 
-    # print('\nTest set: Accuracy: {}/{} ({:.0f}%), Corrects: {}, {}\n'.format(
-    #     (correct_b1 + correct_b2), len(test_loader.dataset),
-    #     100. * (correct_b1 + correct_b2) / len(test_loader.dataset),
-    #     correct_b1, correct_b2
-    # ))
-
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\tF_in:{} None:{} Both{}'.format(
         corrects, len(test_loader.dataset),
-        100. * corrects / len(test_loader.dataset)
+        100. * corrects / len(test_loader.dataset),
+        false_in_class, no_class, both_class
     ))
+
+    # print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+    #     corrects, len(test_loader.dataset),
+    #     100. * corrects / len(test_loader.dataset)
+    # ))
 
 
 def train_net(model, train_loader, device, epoch, args):
