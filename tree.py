@@ -79,6 +79,8 @@ def test_tree(models, test_loader, device, LongTensor):
     no_class = 0
     both_class = 0
     false_in_class = 0
+    correct_from_both = 0
+    max_correct_from_both = 0
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
@@ -107,16 +109,23 @@ def test_tree(models, test_loader, device, LongTensor):
                         false_in_class += 1
                 else:
                     both_class += 1
+                    if (labels[i].item() == (pred_b2[i].item() + 5)) or (labels[i].item() == pred_b1[i].item()):
+                        correct_from_both += 1
+                        if (out_b1[pred_b1[i]] > out_b2[pred_b2[i]]) and (labels[i].item() == pred_b1[i].item()):
+                            max_correct_from_both += 1
+                        elif (out_b2[pred_b2[i]] > out_b1[pred_b1[i]]) and (labels[i].item() == (pred_b2[i].item() + 5)):
+                            max_correct_from_both += 1
+
 
         # out = torch.cat((out_b1, out_b2), dim=1)
 
         # pred = out.max(1, keepdim=True)[1]
         # corrects += pred.eq(labels.view_as(pred)).sum().item()
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\tF_in:{} None:{} Both{}'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
         corrects, len(test_loader.dataset),
         100. * corrects / len(test_loader.dataset),
-        false_in_class, no_class, both_class
+        false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
     ))
 
     # print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
