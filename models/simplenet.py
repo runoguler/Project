@@ -23,4 +23,4 @@ class SimpleNet(nn.Module):
         out = F.max_pool2d(F.relu(self.bn4(self.conv4(out))), 2)
         result = out.view(-1, 64 * 2 * 2)
         result = self.l2(self.l1(result))
-        return result, out
+        return result
