@@ -75,7 +75,7 @@ def cooccurence_matrix_to_data_recursive(no_classes, no_people, cooccurrence_mat
 
 def main():
     no_classes = 10
-    no_people = 10
+    no_people = 1000
 
 
     rand_cooccurrence_matrix = random_cooccurence_matrix(no_classes)
