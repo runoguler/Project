@@ -5,6 +5,7 @@ from torchvision import datasets, transforms
 
 from models.tree_net import TreeRootNet, TreeBranchNet
 from models.simplenet import SimpleNet
+from models.mobilenet import MobileNet
 
 
 def train_tree(models, train_loader, device, epoch, args, LongTensor):
@@ -12,8 +13,8 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
     models[1].train()
     models[2].train()
 
-    loss_b1 = torch.nn.CrossEntropyLoss()
-    loss_b2 = torch.nn.CrossEntropyLoss()
+    loss_b1 = torch.nn.CrossEntropyLoss()   # TODO: Pass Class Weigts
+    loss_b2 = torch.nn.CrossEntropyLoss()   # TODO: Pass Class Weigts
     loss_b1.to(device)
     loss_b2.to(device)
 
@@ -186,6 +187,7 @@ def main():
     parser.add_argument('--test', action='store_true', help='enables test mode')
     parser.add_argument('--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('--simple-net', action='store_true', help='train simple-net instead of tree-net')
+    parser.add_argument('--mobile-net', action='store_true', help='train simple-net instead of tree-net')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N',
@@ -237,6 +239,19 @@ def main():
             torch.save(model.state_dict(), './saved/simplenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/simplenet.pth'))
+            test(model, test_loader, device)
+    elif args.mobile_net:
+        model = MobileNet().to(device)
+
+        if not test:
+            if resume:
+                model.load_state_dict(torch.load('./saved/mobilenet.pth'))
+            for epoch in range(1, args.epochs + 1):
+                train_net(model, train_loader, device, epoch, args)
+                test_net(model, test_loader, device)
+            torch.save(model.state_dict(), './saved/mobilenet.pth')
+        else:
+            model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test(model, test_loader, device)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]

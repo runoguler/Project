@@ -74,7 +74,7 @@ def cooccurence_matrix_to_data_recursive(no_classes, no_people, cooccurrence_mat
 
 
 def main():
-    no_classes = 5
+    no_classes = 10
     no_people = 10
 
 
@@ -90,7 +90,7 @@ def main():
     # rand_pref_table = random_pref_table(no_classes, no_people)
     # cooccurrence_matrix = data_to_cooccurence_matrix(pref_table)
 
-    print('Priority Table: \n', pref_table.T)
+    print('Priority Table: \n', pref_table)
     print('Correlations: \n', np.corrcoef(pref_table.T))
     # print('Coocc: \n', cooccurrence_matrix)
 
