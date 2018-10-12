@@ -9,13 +9,17 @@ from models.mobilenet import MobileNet
 from models.mobile_static_tree_net import TreeRootNet, TreeBranchNet
 
 
-def train_tree(models, train_loader, device, epoch, args, LongTensor):
+def train_tree(models, train_loader, device, epoch, args, use_cuda):
     models[0].train()
     models[1].train()
     models[2].train()
 
-    loss_b1 = torch.nn.CrossEntropyLoss()   # TODO: Pass Class Weigts
-    loss_b2 = torch.nn.CrossEntropyLoss()   # TODO: Pass Class Weigts
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+    weights = [1.0, 1.0, 1.0, 1.0, 1.0, 0.2]
+    class_weights = FloatTensor(weights).to(device)
+
+    loss_b1 = torch.nn.CrossEntropyLoss(weight=class_weights)   # TODO: Pass Class Weigts
+    loss_b2 = torch.nn.CrossEntropyLoss(weight=class_weights)   # TODO: Pass Class Weigts
     loss_b1.to(device)
     loss_b2.to(device)
 
@@ -70,7 +74,7 @@ def train_tree(models, train_loader, device, epoch, args, LongTensor):
         #                100. * batch_idx / len(train_loader), l.item(), ))
 
 
-def test_tree(models, test_loader, device, LongTensor):
+def test_tree(models, test_loader, device, use_cuda):
     models[0].eval()
     models[1].eval()
     models[2].eval()
@@ -257,7 +261,7 @@ def main():
             test(model, test_loader, device)
     elif args.mobile_tree_net:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
-        LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
         if not test:
             if resume:
@@ -265,8 +269,8 @@ def main():
                 models[1].load_state_dict(torch.load('./saved/branch1.pth'))
                 models[2].load_state_dict(torch.load('./saved/branch2.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_tree(models, train_loader, device, epoch, args, LongTensor)
-                test_tree(models, test_loader, device, LongTensor)
+                train_tree(models, train_loader, device, epoch, args, use_cuda)
+                test_tree(models, test_loader, device, use_cuda)
 
             torch.save(models[0].state_dict(), './saved/root.pth')
             torch.save(models[1].state_dict(), './saved/branch1.pth')
@@ -277,10 +281,10 @@ def main():
             models[1].load_state_dict(torch.load('./saved/branch1.pth'))
             models[2].load_state_dict(torch.load('./saved/branch2.pth'))
 
-            test_tree(models, test_loader, device, LongTensor)
+            test_tree(models, test_loader, device, use_cuda)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
-        LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
         if not test:
             if resume:
@@ -288,8 +292,8 @@ def main():
                 models[1].load_state_dict(torch.load('./saved/branch1.pth'))
                 models[2].load_state_dict(torch.load('./saved/branch2.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_tree(models, train_loader, device, epoch, args, LongTensor)
-                test_tree(models, test_loader, device, LongTensor)
+                train_tree(models, train_loader, device, epoch, args, use_cuda)
+                test_tree(models, test_loader, device, use_cuda)
 
             torch.save(models[0].state_dict(), './saved/root.pth')
             torch.save(models[1].state_dict(), './saved/branch1.pth')
@@ -300,7 +304,7 @@ def main():
             models[1].load_state_dict(torch.load('./saved/branch1.pth'))
             models[2].load_state_dict(torch.load('./saved/branch2.pth'))
 
-            test_tree(models, test_loader, device, LongTensor)
+            test_tree(models, test_loader, device, use_cuda)
 
 
 if __name__ == '__main__':

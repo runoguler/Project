@@ -48,7 +48,7 @@ class TreeBranchNet(nn.Module):
 
     def __init__(self, branch=6):
         super(TreeBranchNet, self).__init__()
-        self.layers = self._make_layers(in_planes=32)
+        self.layers = self._make_layers(in_planes=256)
         self.linear = nn.Linear(1024, branch)
 
     def _make_layers(self, in_planes):
@@ -65,4 +65,4 @@ class TreeBranchNet(nn.Module):
         out = F.avg_pool2d(out, 2)
         result = out.view(out.size(0), -1)
         result = self.linear(result)
-        return out, result
+        return result, out
