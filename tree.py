@@ -14,12 +14,12 @@ def train_tree(models, train_loader, device, epoch, args, use_cuda):
     models[1].train()
     models[2].train()
 
-    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
-    weights = [1.0, 1.0, 1.0, 1.0, 1.0, 0.2]
-    class_weights = FloatTensor(weights).to(device)
+    # FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+    # weights = [1.0, 1.0, 1.0, 1.0, 1.0, 0.2]
+    # class_weights = FloatTensor(weights).to(device)
 
-    loss_b1 = torch.nn.CrossEntropyLoss(weight=class_weights)   # TODO: Pass Class Weigts
-    loss_b2 = torch.nn.CrossEntropyLoss(weight=class_weights)   # TODO: Pass Class Weigts
+    loss_b1 = torch.nn.CrossEntropyLoss()
+    loss_b2 = torch.nn.CrossEntropyLoss()
     loss_b1.to(device)
     loss_b2.to(device)
 
