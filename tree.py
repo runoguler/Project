@@ -6,6 +6,7 @@ from torchvision import datasets, transforms
 from models.tree_net import TreeRootNet, TreeBranchNet
 from models.simplenet import SimpleNet
 from models.mobilenet import MobileNet
+from models.mobile_static_tree_net import TreeRootNet, TreeBranchNet
 
 
 def train_tree(models, train_loader, device, epoch, args, LongTensor):
@@ -187,7 +188,8 @@ def main():
     parser.add_argument('--test', action='store_true', help='enables test mode')
     parser.add_argument('--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('--simple-net', action='store_true', help='train simple-net instead of tree-net')
-    parser.add_argument('--mobile-net', action='store_true', help='train simple-net instead of tree-net')
+    parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
+    parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N',
@@ -253,6 +255,29 @@ def main():
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test(model, test_loader, device)
+    elif args.mobile_tree_net:
+        models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
+        LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+
+        if not test:
+            if resume:
+                models[0].load_state_dict(torch.load('./saved/root.pth'))
+                models[1].load_state_dict(torch.load('./saved/branch1.pth'))
+                models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+            for epoch in range(1, args.epochs + 1):
+                train_tree(models, train_loader, device, epoch, args, LongTensor)
+                test_tree(models, test_loader, device, LongTensor)
+
+            torch.save(models[0].state_dict(), './saved/root.pth')
+            torch.save(models[1].state_dict(), './saved/branch1.pth')
+            torch.save(models[2].state_dict(), './saved/branch2.pth')
+
+        if test:
+            models[0].load_state_dict(torch.load('./saved/root.pth'))
+            models[1].load_state_dict(torch.load('./saved/branch1.pth'))
+            models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+
+            test_tree(models, test_loader, device, LongTensor)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
         LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
