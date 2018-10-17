@@ -6,7 +6,10 @@ from torchvision import datasets, transforms
 from models.tree_net import TreeRootNet, TreeBranchNet
 from models.simplenet import SimpleNet
 from models.mobilenet import MobileNet
-from models.mobile_static_tree_net import TreeRootNet, TreeBranchNet
+from models.mobile_static_tree_net import StaticTreeRootNet, StaticTreeBranchNet
+from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
+
+import utils
 
 
 def train_tree(models, train_loader, device, epoch, args, use_cuda):
@@ -182,18 +185,75 @@ def test_net(model, test_loader, device):
         100. * correct / len(test_loader.dataset)))
 
 
+def generate_model_list(root_node, lvl, device):
+    cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
+    root_step = 3
+    models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
+    nodes = [root_node]
+    index = 0
+    remaining = 1
+    steps = [3,6,6,9,9,9,9,12,12,12,12,12,12,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+    while remaining > 0:
+        if nodes[index] is None:
+            models.append(None)
+            models.append(None)
+            nodes.append(None)
+            nodes.append(None)
+            index += 1
+            continue
+
+        conv_step = steps[index] - (3 - root_step)
+
+        in_planes = cfg_full[conv_step-1] if isinstance(cfg_full[conv_step-1], int) else cfg_full[conv_step-1][0]
+
+        # LEFT BRANCH
+        left = nodes[index].left
+        if not isinstance(left, int):
+            if left.count > 3:
+                models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step+3], in_planes=in_planes).to(device))
+                nodes.append(left)
+                remaining += 1
+            else:
+                models.append(MobileTreeLeafNet(branch=(left.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+                nodes.append(None)
+        else:
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+            nodes.append(None)
+
+        # RIGHT BRANCH
+        right = nodes[index].right
+        if not isinstance(right, int):
+            if right.count > 3:
+                models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step+3], in_planes=in_planes).to(device))
+                nodes.append(right)
+                remaining += 1
+            else:
+                models.append(MobileTreeLeafNet(branch=(right.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+                nodes.append(None)
+        else:
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+            nodes.append(None)
+
+        index += 1
+        remaining -= 1
+    return models
+
+
 def main():
     batch_size = 64
     test_batch_size = 1000
     epochs = 20
     lr = 0.002
+    depth = 2
 
     parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
     parser.add_argument('--test', action='store_true', help='enables test mode')
     parser.add_argument('--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('--simple-net', action='store_true', help='train simple-net instead of tree-net')
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
+    parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
+    parser.add_argument('--depth', type=int, default=depth, choices=[1,2,3], metavar='lvl', help='depth of the tree')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N',
@@ -259,8 +319,40 @@ def main():
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test(model, test_loader, device)
+    elif args.mobile_static_tree_net:
+        models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
+        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+
+        if not test:
+            if resume:
+                models[0].load_state_dict(torch.load('./saved/root.pth'))
+                models[1].load_state_dict(torch.load('./saved/branch1.pth'))
+                models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+            for epoch in range(1, args.epochs + 1):
+                train_tree(models, train_loader, device, epoch, args, use_cuda)
+                test_tree(models, test_loader, device, use_cuda)
+
+            torch.save(models[0].state_dict(), './saved/root.pth')
+            torch.save(models[1].state_dict(), './saved/branch1.pth')
+            torch.save(models[2].state_dict(), './saved/branch2.pth')
+
+        if test:
+            models[0].load_state_dict(torch.load('./saved/root.pth'))
+            models[1].load_state_dict(torch.load('./saved/branch1.pth'))
+            models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+
+            test_tree(models, test_loader, device, use_cuda)
     elif args.mobile_tree_net:
-        models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
+        cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
+        # TODO GET TREE HIERARCHY STRUCTURE!!!
+
+        root_node = utils.generate(10, 80)
+        lvl = args.depth
+        models = generate_model_list(root_node, lvl, device)
+
+
+
+        models = [MobileTreeRootNet().to(device), MobileTreeBranchNet().to(device), MobileTreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
         if not test:

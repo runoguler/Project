@@ -8,15 +8,19 @@ from matplotlib import pyplot as plt
 
 
 class TreeNode():
-    def __init__(self, value, left, right):
+    def __init__(self, value, left, right, left_depth, right_depth):
         super(TreeNode, self).__init__()
+        self.value = value
         self.left = left
         self.right = right
-        self.value = value
+        self.left_depth = left_depth
+        self.right_depth = right_depth
+        self.depth = min(left_depth, right_depth)
+        self.count = len(value)
 
     def __str__(self, level = 0):
         all = False
-        ret = "\t" * level + str(self.value) + "\n"
+        ret = "\t" * level + str(self.value) + " count: " + str(self.count) + " level: " + str(level) + " depth: " + "(" + str(self.left_depth) + "," + str(self.right_depth)+ ")" + "\n"
         if all:
             if not isinstance(self.left, int):
                 ret += self.left.__str__(level + 1)
@@ -65,23 +69,32 @@ def linkage_to_tree(Z, classes):
     nodes = []
     for i in range(len(Z)):
         if Z[i][1] < classes:
-            nodes.append(TreeNode((int(Z[i][0]), int(Z[i][1])), int(Z[i][0]), int(Z[i][1])))
+            nodes.append(TreeNode((int(Z[i][0]), int(Z[i][1])), int(Z[i][0]), int(Z[i][1]), 0, 0))
         else:
             if Z[i][0] >= classes:
                 index_0 = int(Z[i][0] - classes)
                 index_1 = int(Z[i][1] - classes)
-                nodes.append(TreeNode((nodes[index_0].value + nodes[index_1].value), nodes[index_0], nodes[index_1]))
+                nodes.append(TreeNode((nodes[index_0].value + nodes[index_1].value), nodes[index_0], nodes[index_1], nodes[index_0].depth + 1, nodes[index_1].depth + 1))
             else:
                 index = int(Z[i][1] - classes)
-                nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0])))
+                nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth + 1, 0))
     return nodes[-1]
 
+def generate(classes, samples):
+    preference_table = generate_preference_table(classes, samples)
+    np.save('preference_table', preference_table)
+
+    Z = linkage(preference_table, 'ward')
+    L, last_2 = simplify_linkage(Z, classes)
+    RootNode = linkage_to_tree(Z, classes)
+
+    return RootNode
 
 def main():
     np.set_printoptions(linewidth=320)
 
     classes = 10
-    samples = 90
+    samples = 80
 
     preference_table = generate_preference_table(classes, samples)
     np.save('preference_table', preference_table)
