@@ -143,6 +143,152 @@ def test_tree(models, test_loader, device, use_cuda):
     # ))
 
 
+def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+    leaf_node_index = []
+    leaf_node_paths = []
+    losses = []
+    for i in range(len(models)):
+        if isinstance(models[i], MobileTreeLeafNet):
+            leaf_node_index.append(i)
+        if not models[i] is None:
+            models[i].train()
+        else:
+            losses.append(None)
+
+    optims = []
+    for i in leaf_node_index:
+        temp = []
+        while i > 0:
+            temp.append(i)
+            i = (i+1)//2 - 1
+        leaf_node_paths.append(temp)
+        path = list(models[0].parameters())
+        for i in reversed(temp):
+            path += list(models[i].parameters())
+        losses.append(torch.nn.CrossEntropyLoss())
+        losses[i].to(device)
+        optims.append(torch.optim.Adam(path, lr=args.lr, betas=(0.5, 0.999)))
+
+
+    for batch_idx, (data, labels) in enumerate(train_loader):
+        data, labels = data.to(device), labels.to(device)
+
+        for i in range(len(optims)):
+            optims[i].zero_grad()
+
+        layer = models[0](data)
+        for i in range(len(leaf_node_paths)):
+            for j in leaf_node_paths[i]:
+                k = leaf_node_paths[i][j]
+                if j+1 == len(leaf_node_paths[i]):
+                    result, _= models[k](layer)
+                    ## TODO Change Labels for each Leaf Node, calculate the loss and step the optimizer
+                else:
+                    layer = models[k](layer)
+
+
+        b1_labels = labels.clone()
+        b2_labels = labels.clone() - 5
+
+        b1_labels[b1_labels > 4] = 5
+        b2_labels[b2_labels < 0] = 5
+
+        # b1_labels = torch.zeros((labels.size(0), 5), device=device)
+        # b2_labels = torch.zeros((labels.size(0), 5), device=device)
+        #
+        # for i in range(labels.size(0)):
+        #     if labels[i].item() < 5:
+        #         b1_labels[i][labels[i].item()] = 1
+        #     else:
+        #         b2_labels[i][labels[i].item()-5] = 1
+
+        b1_loss = loss_b1(out_b1, b1_labels)
+        b1_loss.backward(retain_graph=True)  ## retain_graph=True
+        optim_b1.step()
+
+        b2_loss = loss_b2(out_b2, b2_labels)
+        b2_loss.backward()
+        optim_b2.step()
+
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                       100. * batch_idx / len(train_loader), b1_loss.item(), b2_loss.item()))
+
+        # if batch_idx % args.log_interval == 0:
+        #     print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+        #         epoch, batch_idx * len(data), len(train_loader.dataset),
+        #                100. * batch_idx / len(train_loader), l.item(), ))
+
+
+def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
+    models[0].eval()
+    models[1].eval()
+    models[2].eval()
+
+    # correct_b1 = 0
+    # correct_b2 = 0
+    corrects = 0
+    no_class = 0
+    both_class = 0
+    false_in_class = 0
+    correct_from_both = 0
+    max_correct_from_both = 0
+
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+
+        layer = models[0](data)
+        out_b1, _ = models[1](layer)
+        out_b2, _ = models[2](layer)
+
+        pred_b1 = out_b1.max(1, keepdim=True)[1]
+        pred_b2 = out_b2.max(1, keepdim=True)[1]
+
+        for i in range(labels.size(0)):
+            if pred_b1[i] == 5:
+                if pred_b2[i] == 5:
+                    no_class += 1
+                else:
+                    if labels[i].item() == (pred_b2[i].item() + 5):
+                        corrects += 1
+                    else:
+                        false_in_class += 1
+            else:
+                if pred_b2[i] == 5:
+                    if labels[i].item() == pred_b1[i].item():
+                        corrects += 1
+                    else:
+                        false_in_class += 1
+                else:
+                    both_class += 1
+                    if (labels[i].item() == (pred_b2[i].item() + 5)) or (labels[i].item() == pred_b1[i].item()):
+                        correct_from_both += 1
+                        if (out_b1[i][pred_b1[i].item()].item() > out_b2[i][pred_b2[i].item()].item()) and (
+                                labels[i].item() == pred_b1[i].item()):
+                            max_correct_from_both += 1
+                        elif (out_b2[i][pred_b2[i].item()].item() > out_b1[i][pred_b1[i].item()].item()) and (
+                                labels[i].item() == (pred_b2[i].item() + 5)):
+                            max_correct_from_both += 1
+
+        # out = torch.cat((out_b1, out_b2), dim=1)
+
+        # pred = out.max(1, keepdim=True)[1]
+        # corrects += pred.eq(labels.view_as(pred)).sum().item()
+
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
+        corrects, len(test_loader.dataset),
+        100. * corrects / len(test_loader.dataset),
+        false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
+    ))
+
+    # print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+    #     corrects, len(test_loader.dataset),
+    #     100. * corrects / len(test_loader.dataset)
+    # ))
+
+
+
 def train_net(model, train_loader, device, epoch, args):
     model.train()
     loss = torch.nn.CrossEntropyLoss()
@@ -186,8 +332,9 @@ def test_net(model, test_loader, device):
 
 
 def generate_model_list(root_node, lvl, device):
+    leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
-    root_step = 3
+    root_step = 1
     models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
     nodes = [root_node]
     index = 0
@@ -216,9 +363,11 @@ def generate_model_list(root_node, lvl, device):
             else:
                 models.append(MobileTreeLeafNet(branch=(left.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
                 nodes.append(None)
+                leaf_node_labels.append(left.value)
         else:
             models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
             nodes.append(None)
+            leaf_node_labels.append(left)
 
         # RIGHT BRANCH
         right = nodes[index].right
@@ -230,13 +379,15 @@ def generate_model_list(root_node, lvl, device):
             else:
                 models.append(MobileTreeLeafNet(branch=(right.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
                 nodes.append(None)
+                leaf_node_labels.append(right.value)
         else:
             models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
             nodes.append(None)
+            leaf_node_labels.append(right)
 
         index += 1
         remaining -= 1
-    return models
+    return models, leaf_node_labels
 
 
 def main():
@@ -343,37 +494,29 @@ def main():
 
             test_tree(models, test_loader, device, use_cuda)
     elif args.mobile_tree_net:
-        cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
-        # TODO GET TREE HIERARCHY STRUCTURE!!!
-
         root_node = utils.generate(10, 80)
         lvl = args.depth
-        models = generate_model_list(root_node, lvl, device)
-
-
-
-        models = [MobileTreeRootNet().to(device), MobileTreeBranchNet().to(device), MobileTreeBranchNet().to(device)]
-        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
+        models, leaf_node_labels = generate_model_list(root_node, lvl, device)
 
         if not test:
             if resume:
-                models[0].load_state_dict(torch.load('./saved/root.pth'))
-                models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-                models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+                for i in range(len(models)):
+                    if not models[i] is None:
+                        models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_tree(models, train_loader, device, epoch, args, use_cuda)
-                test_tree(models, test_loader, device, use_cuda)
+                train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda)
 
-            torch.save(models[0].state_dict(), './saved/root.pth')
-            torch.save(models[1].state_dict(), './saved/branch1.pth')
-            torch.save(models[2].state_dict(), './saved/branch2.pth')
+            for i in range(len(models)):
+                if not models[i] is None:
+                    torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
 
         if test:
-            models[0].load_state_dict(torch.load('./saved/root.pth'))
-            models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-            models[2].load_state_dict(torch.load('./saved/branch2.pth'))
+            for i in range(len(models)):
+                if not models[i] is None:
+                    models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_tree(models, test_loader, device, use_cuda)
+            test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
