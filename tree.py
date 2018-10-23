@@ -288,9 +288,10 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
             else:
                 wrong += 1
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\tDefinite Corrects: {}\n'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.dataset),
-        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset), definite_correct
+        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
+        definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
     ))
 
 
@@ -373,7 +374,7 @@ def generate_model_list(root_node, level, device):
         # LEFT BRANCH
         left = nodes[index].left
         if not isinstance(left, int):
-            if left.count > 3:
+            if left.count > 3 and lvl < level:
                 models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step+3], in_planes=in_planes).to(device))
                 nodes.append(left)
                 remaining += 1
@@ -389,7 +390,7 @@ def generate_model_list(root_node, level, device):
         # RIGHT BRANCH
         right = nodes[index].right
         if not isinstance(right, int):
-            if right.count > 3:
+            if right.count > 3 and lvl < level:
                 models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step+3], in_planes=in_planes).to(device))
                 nodes.append(right)
                 remaining += 1
@@ -405,7 +406,7 @@ def generate_model_list(root_node, level, device):
         index += 1
         remaining -= 1
     print(root_node)
-    print(models)
+    # print(models)
     return models, leaf_node_labels
 
 
@@ -414,7 +415,7 @@ def main():
     test_batch_size = 1000
     epochs = 20
     lr = 0.002
-    depth = 2
+    depth = 4
 
     parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
     parser.add_argument('--test', action='store_true', help='enables test mode')
@@ -423,7 +424,7 @@ def main():
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
-    parser.add_argument('--depth', type=int, default=depth, choices=[1,2,3], metavar='lvl', help='depth of the tree')
+    parser.add_argument('--depth', type=int, default=depth, choices=[1,2,3,4], metavar='lvl', help='depth of the tree')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N',
