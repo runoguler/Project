@@ -185,13 +185,16 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
 
                     lbls = labels.clone()
                     for l in range(len(lbls)):
-                        if lbls[l].item() == leaf_node_labels[i] or (not isinstance(leaf_node_labels[i], int) and lbls[l].item() in leaf_node_labels[i]):
-                            lbls[l] = leaf_node_labels[i].index(lbls[l])
-                        else:
-                            if not isinstance(leaf_node_labels[i], int):
-                                lbls[l] = len(leaf_node_labels[i])
+                        if isinstance(leaf_node_labels[i], int):
+                            if lbls[l].item() == leaf_node_labels[i]:
+                                lbls[l] = 0
                             else:
                                 lbls[l] = 1
+                        else:
+                            if lbls[l].item() in leaf_node_labels[i]:
+                                lbls[l] = leaf_node_labels[i].index(lbls[l])
+                            else:
+                                lbls[l] = len(leaf_node_labels[i])
 
                     l = losses[i](result, lbls)
                     l.backward(retain_graph=True)
@@ -244,13 +247,16 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
 
                     lbls = labels.clone()
                     for l in range(len(lbls)):
-                        if lbls[l].item() == leaf_node_labels[i] or (not isinstance(leaf_node_labels[i], int) and lbls[l].item() in leaf_node_labels[i]):
-                            lbls[l] = leaf_node_labels[i].index(lbls[l])
-                        else:
-                            if not isinstance(leaf_node_labels[i], int):
-                                lbls[l] = len(leaf_node_labels[i])
+                        if isinstance(leaf_node_labels[i], int):
+                            if lbls[l].item() == leaf_node_labels[i]:
+                                lbls[l] = 0
                             else:
                                 lbls[l] = 1
+                        else:
+                            if lbls[l].item() in leaf_node_labels[i]:
+                                lbls[l] = leaf_node_labels[i].index(lbls[l])
+                            else:
+                                lbls[l] = len(leaf_node_labels[i])
 
                     pred.append(result.max(1, keepdim=True)[1])
                 else:
@@ -440,7 +446,6 @@ def main():
     test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True,
                                               **cuda_args)
 
-    args.mobile_tree_net = True
 
     if args.simple_net:
         model = SimpleNet().to(device)
