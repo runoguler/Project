@@ -266,15 +266,20 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
             lbl = labels[i].item()
             ln_index = -1
             for j in range(len(leaf_node_labels)):
-                if lbl in leaf_node_labels[j]:
-                    k = leaf_node_labels[j].index(lbl)
-                    ln_index = (j, k)
-                    break
-            if pred[ln_index[0]][i] == ln_index[1]:
+                if isinstance(leaf_node_labels[j], int):
+                    if lbl == leaf_node_labels[j]:
+                        ln_index = j
+                        break
+                else:
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+            if (isinstance(ln_index, int) and pred[ln_index][i] == 0) or pred[ln_index[0]][i] == ln_index[1]:
                 definite = True
                 for j in range(len(leaf_node_index)):
-                    if j != ln_index[0]:
-                        if pred[j][i] != len(leaf_node_labels[j]):
+                    if (isinstance(ln_index, int) and j != ln_index) or j != ln_index[0]:
+                        if (isinstance(leaf_node_labels[j], int) and pred[j][i] != 1) or pred[j][i] != len(leaf_node_labels[j]):
                             definite = False
                 if definite:
                     definite_correct += 1
