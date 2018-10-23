@@ -30,7 +30,7 @@ class StaticTreeRootNet(nn.Module):
 
     def _make_layers(self, in_planes):
         layers = []
-        for x in self.cfg:
+        for x in self.cfg_half:
             out_planes = x if isinstance(x, int) else x[0]
             stride = 1 if isinstance(x, int) else x[1]
             layers.append(Block(in_planes, out_planes, stride))
@@ -50,12 +50,12 @@ class StaticTreeBranchNet(nn.Module):
 
     def __init__(self, branch=6):
         super(StaticTreeBranchNet, self).__init__()
-        self.layers = self._make_layers(in_planes=256)
-        self.linear = nn.Linear(1024, branch)
+        self.layers = self._make_layers(in_planes=128)
+        self.linear = nn.Linear(512, branch)
 
     def _make_layers(self, in_planes):
         layers = []
-        for x in self.cfg:
+        for x in self.cfg_half:
             out_planes = x if isinstance(x, int) else x[0]
             stride = 1 if isinstance(x, int) else x[1]
             layers.append(Block(in_planes, out_planes, stride))

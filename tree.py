@@ -373,11 +373,11 @@ def generate_model_list(root_node, level, device):
                 nodes.append(left)
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(left.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+                models.append(MobileTreeLeafNet(branch=(left.count+1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(left.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
             nodes.append(None)
             leaf_node_labels.append(left)
 
@@ -389,18 +389,18 @@ def generate_model_list(root_node, level, device):
                 nodes.append(right)
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(right.count+1), input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+                models.append(MobileTreeLeafNet(branch=(right.count+1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(right.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes).to(device))
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
             nodes.append(None)
             leaf_node_labels.append(right)
 
         index += 1
         remaining -= 1
     print(root_node)
-    # print(models)
+    print(models)
     return models, leaf_node_labels
 
 

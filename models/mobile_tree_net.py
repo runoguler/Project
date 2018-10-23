@@ -71,10 +71,10 @@ class MobileTreeLeafNet(nn.Module):
     cfg = [512, 512, 512, 512, 512, (1024, 2), 1024]
     cfg_half = [256, 256, 256, 256, 256, (512, 2), 512]
 
-    def __init__(self, branch=6, input=cfg, in_planes=512):
+    def __init__(self, branch=6, input=cfg, in_planes=512, fcl=1024):
         super(MobileTreeLeafNet, self).__init__()
         self.layers = self._make_layers(in_planes=in_planes, input=input)
-        self.linear = nn.Linear(1024, branch)
+        self.linear = nn.Linear(fcl, branch)
 
     def _make_layers(self, in_planes, input):
         layers = []
