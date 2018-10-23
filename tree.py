@@ -175,29 +175,34 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
         for i in range(len(optims)):
             optims[i].zero_grad()
 
-        layer = models[0](data)
+        losses_to_print = []
         for i in range(len(leaf_node_paths)):   # for every branch(path) going to a leaf node
-            for j in leaf_node_paths[i]:
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
                 if j+1 == len(leaf_node_paths[i]):
                     result, _= models[k](layer)
 
                     lbls = labels.clone()
                     for l in range(len(lbls)):
-                        if lbls[l] in leaf_node_labels[i]:
+                        if lbls[l].item() == leaf_node_labels[i] or (not isinstance(leaf_node_labels[i], int) and lbls[l].item() in leaf_node_labels[i]):
                             lbls[l] = leaf_node_labels[i].index(lbls[l])
                         else:
-                            lbls[l] = len(leaf_node_labels[i])
+                            if not isinstance(leaf_node_labels[i], int):
+                                lbls[l] = len(leaf_node_labels[i])
+                            else:
+                                lbls[l] = 1
 
                     l = losses[i](result, lbls)
                     l.backward(retain_graph=True)
                     optims[i].step()
+                    losses_to_print.append(l)
                 else:
                     layer = models[k](layer)
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
-            for loss in losses:
+            for loss in losses_to_print:
                 p_str += '\tLoss: {:.6f}'.format(loss.item())
 
             print(p_str.format(
@@ -232,17 +237,20 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
         pred = []
         layer = models[0](data)
         for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-            for j in leaf_node_paths[i]:
+            for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
                 if j + 1 == len(leaf_node_paths[i]):
                     result, _ = models[k](layer)
 
                     lbls = labels.clone()
                     for l in range(len(lbls)):
-                        if lbls[l] in leaf_node_labels[i]:
+                        if lbls[l].item() == leaf_node_labels[i] or (not isinstance(leaf_node_labels[i], int) and lbls[l].item() in leaf_node_labels[i]):
                             lbls[l] = leaf_node_labels[i].index(lbls[l])
                         else:
-                            lbls[l] = len(leaf_node_labels[i])
+                            if not isinstance(leaf_node_labels[i], int):
+                                lbls[l] = len(leaf_node_labels[i])
+                            else:
+                                lbls[l] = 1
 
                     pred.append(result.max(1, keepdim=True)[1])
                 else:
@@ -273,7 +281,6 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
         (definite_correct + indefinite_correct), len(test_loader.dataset),
         100. * (definite_correct + indefinite_correct) / len(test_loader.dataset), definite_correct
     ))
-
 
 
 def train_net(model, train_loader, device, epoch, args):
@@ -374,6 +381,8 @@ def generate_model_list(root_node, lvl, device):
 
         index += 1
         remaining -= 1
+    print(root_node)
+    # print(models)
     return models, leaf_node_labels
 
 
