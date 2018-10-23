@@ -238,8 +238,8 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
         data, labels = data.to(device), label.to(device)
 
         pred = []
-        layer = models[0](data)
         for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
+            layer = models[0](data)
             for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
                 if j + 1 == len(leaf_node_paths[i]):
@@ -331,7 +331,7 @@ def test_net(model, test_loader, device):
         100. * correct / len(test_loader.dataset)))
 
 
-def generate_model_list(root_node, lvl, device):
+def generate_model_list(root_node, level, device):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
     root_step = 1
@@ -339,8 +339,24 @@ def generate_model_list(root_node, lvl, device):
     nodes = [root_node]
     index = 0
     remaining = 1
-    steps = [3,6,6,9,9,9,9,12,12,12,12,12,12,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+    # steps = [3,6,6,9,9,9,9,12,12,12,12,12,12,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
+    lvl = 0
+    lvl_cnt = 0
     while remaining > 0:
+        if lvl_cnt == 0:
+            lvl += 1
+            lvl_cnt = 2 ** (lvl - 1)
+
+            conv_step = (3 * lvl) - (3 - root_step)  # steps[index] - (3 - root_step)
+            in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 1][0]
+
+            for i in range(conv_step, len(cfg_full)):
+                if isinstance(cfg_full[i], int):
+                    cfg_full[i] //= 2
+                else:
+                    cfg_full[i] = (cfg_full[i][0] // 2, cfg_full[i][1])
+        lvl_cnt -= 1
+
         if nodes[index] is None:
             models.append(None)
             models.append(None)
@@ -348,10 +364,6 @@ def generate_model_list(root_node, lvl, device):
             nodes.append(None)
             index += 1
             continue
-
-        conv_step = steps[index] - (3 - root_step)
-
-        in_planes = cfg_full[conv_step-1] if isinstance(cfg_full[conv_step-1], int) else cfg_full[conv_step-1][0]
 
         # LEFT BRANCH
         left = nodes[index].left
@@ -497,7 +509,7 @@ def main():
 
             test_tree(models, test_loader, device, use_cuda)
     elif args.mobile_tree_net:
-        root_node = utils.generate(10, 80)
+        root_node = utils.generate(10, 80, resume)
         lvl = args.depth
         models, leaf_node_labels = generate_model_list(root_node, lvl, device)
 

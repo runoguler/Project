@@ -80,9 +80,12 @@ def linkage_to_tree(Z, classes):
                 nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth + 1, 0))
     return nodes[-1]
 
-def generate(classes, samples):
-    preference_table = generate_preference_table(classes, samples)
-    np.save('preference_table', preference_table)
+def generate(classes, samples, resume=False):
+    if resume:
+        preference_table = np.load('preference_table.npy')
+    else:
+        preference_table = generate_preference_table(classes, samples)
+        np.save('preference_table', preference_table)
 
     Z = linkage(preference_table, 'ward')
     L, last_2 = simplify_linkage(Z, classes)
