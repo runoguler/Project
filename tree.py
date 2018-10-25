@@ -384,37 +384,49 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
     for model in models:
         model.eval()
 
-    corrects = []
+    definite_correct = 0
+    indefinite_correct = 0
+    wrong = 0
+
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
 
+        pred = []
         for i in range(len(models)):
-            correct = 0
             output = models[i](data)
-            pred = output.max(1, keepdim=True)[1]
+            pred.append(output.max(1, keepdim=True)[1])
 
-            lbls = labels.clone()
-            for l in range(len(lbls)):
-                if isinstance(leaf_node_labels[i], int):
-                    if lbls[l].item() == leaf_node_labels[i]:
-                        lbls[l] = 0
-                    else:
-                        lbls[l] = 1
+        for i in range(len(labels)):
+            lbl = labels[i].item()
+            ln_index = -1
+            for j in range(len(leaf_node_labels)):
+                if isinstance(leaf_node_labels[j], int):
+                    if lbl == leaf_node_labels[j]:
+                        ln_index = j
+                        break
                 else:
-                    if lbls[l].item() in leaf_node_labels[i]:
-                        lbls[l] = leaf_node_labels[i].index(lbls[l])
-                    else:
-                        lbls[l] = len(leaf_node_labels[i])
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+            if (isinstance(ln_index, int) and pred[ln_index][i] == 0) or pred[ln_index[0]][i] == ln_index[1]:
+                definite = True
+                for j in range(len(leaf_node_labels)):
+                    if (isinstance(ln_index, int) and j != ln_index) or j != ln_index[0]:
+                        if (isinstance(leaf_node_labels[j], int) and pred[j][i] != 1) or pred[j][i] != len(leaf_node_labels[j]):
+                            definite = False
+                if definite:
+                    definite_correct += 1
+                else:
+                    indefinite_correct += 1
+            else:
+                wrong += 1
 
-            correct += pred.eq(labels.view_as(pred)).sum().item()
-            corrects.append(correct)
-
-    p_str = '\nTest set:'
-    for correct in corrects:
-        p_str += ' Accuracy: {}/{} ({:.0f}%) '.format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset))
-    p_str += '\n'
-
-    print(p_str)
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
+        (definite_correct + indefinite_correct), len(test_loader.dataset),
+        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
+        definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+    ))
 
 
 def generate_model_list(root_node, level, device):
