@@ -245,7 +245,7 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda):
                 if j + 1 == len(leaf_node_paths[i]):
                     result, _ = models[k](layer)
 
-                    lbls = labels.clone()
+                    lbls = labels.clone()   #TODO NOT USING THIS WHOLE BLOCK FOR SOME REASON :D
                     for l in range(len(lbls)):
                         if isinstance(leaf_node_labels[i], int):
                             if lbls[l].item() == leaf_node_labels[i]:
@@ -337,6 +337,86 @@ def test_net(model, test_loader, device):
         100. * correct / len(test_loader.dataset)))
 
 
+def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args):
+    parameters = list()
+    for model in models:
+        model.train()
+        parameters += list(model.parameters())
+
+    loss = torch.nn.CrossEntropyLoss()
+    loss.to(device)
+
+    optim = torch.optim.Adam(parameters, lr=args.lr, betas=(0.5, 0.999))
+
+    for batch_idx, (data, labels) in enumerate(train_loader):
+        data, labels = data.to(device), labels.to(device)
+
+        optim.zero_grad()
+        losses = 0
+        for i in range(len(models)):
+            output = models[i](data)
+
+            lbls = labels.clone()
+            for l in range(len(lbls)):
+                if isinstance(leaf_node_labels[i], int):
+                    if lbls[l].item() == leaf_node_labels[i]:
+                        lbls[l] = 0
+                    else:
+                        lbls[l] = 1
+                else:
+                    if lbls[l].item() in leaf_node_labels[i]:
+                        lbls[l] = leaf_node_labels[i].index(lbls[l])
+                    else:
+                        lbls[l] = len(leaf_node_labels[i])
+
+            losses += loss(output, lbls)
+
+        losses.backward()
+        optim.step()
+
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), losses.item()))
+
+
+def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
+    for model in models:
+        model.eval()
+
+    corrects = []
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+
+        for i in range(len(models)):
+            correct = 0
+            output = models[i](data)
+            pred = output.max(1, keepdim=True)[1]
+
+            lbls = labels.clone()
+            for l in range(len(lbls)):
+                if isinstance(leaf_node_labels[i], int):
+                    if lbls[l].item() == leaf_node_labels[i]:
+                        lbls[l] = 0
+                    else:
+                        lbls[l] = 1
+                else:
+                    if lbls[l].item() in leaf_node_labels[i]:
+                        lbls[l] = leaf_node_labels[i].index(lbls[l])
+                    else:
+                        lbls[l] = len(leaf_node_labels[i])
+
+            correct += pred.eq(labels.view_as(pred)).sum().item()
+            corrects.append(correct)
+
+    p_str = '\nTest set:'
+    for correct in corrects:
+        p_str += ' Accuracy: {}/{} ({:.0f}%) '.format(correct, len(test_loader.dataset), 100. * correct / len(test_loader.dataset))
+    p_str += '\n'
+
+    print(p_str)
+
+
 def generate_model_list(root_node, level, device):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
@@ -410,6 +490,36 @@ def generate_model_list(root_node, level, device):
     return models, leaf_node_labels
 
 
+def find_leaf_node_labels(root_node, level):
+    leaf_node_labels = []
+
+    search = [(root_node, 0)]
+    while search:
+        i = search.pop()
+        node = i[0]
+        lvl = i[1] + 1
+        left = node.left
+        right = node.right
+
+        if isinstance(left, int):
+            leaf_node_labels.append(left)
+        else:
+            if left.count > 3 and lvl < level:
+                search.append((left, lvl))
+            else:
+                leaf_node_labels.append(left.value)
+
+        if isinstance(right, int):
+            leaf_node_labels.append(right)
+        else:
+            if right.count > 3 and lvl < level:
+                search.append((right, lvl))
+            else:
+                leaf_node_labels.append(right.value)
+
+    return leaf_node_labels
+
+
 def main():
     batch_size = 64
     test_batch_size = 1000
@@ -422,6 +532,7 @@ def main():
     parser.add_argument('--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('--simple-net', action='store_true', help='train simple-net instead of tree-net')
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
+    parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
     parser.add_argument('--depth', type=int, default=depth, choices=[1,2,3,4], metavar='lvl', help='depth of the tree')
@@ -439,8 +550,6 @@ def main():
 
     test = args.test
     resume = args.resume
-    # test = True
-    # resume = True
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -463,7 +572,6 @@ def main():
                                                **cuda_args)
     test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True,
                                               **cuda_args)
-
 
     if args.simple_net:
         model = SimpleNet().to(device)
@@ -516,8 +624,7 @@ def main():
             test_tree(models, test_loader, device, use_cuda)
     elif args.mobile_tree_net:
         root_node = utils.generate(10, 80, resume)
-        lvl = args.depth
-        models, leaf_node_labels = generate_model_list(root_node, lvl, device)
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
 
         if not test:
             if resume:
@@ -538,6 +645,30 @@ def main():
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda)
+    elif args.parallel_mobile_nets:
+        root_node = utils.generate(10, 80, resume)
+        leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
+        models = []
+        for i in leaf_node_labels:
+            branches = 2 if isinstance(i, int) else len(i) + 1
+            models.append(MobileNet(num_classes=branches).to(device))
+
+        print(root_node)
+
+        if not test:
+            if resume:
+                for i in range(len(models)):
+                    models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
+            for epoch in range(1, args.epochs + 1):
+                train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args)
+                test_parallel_mobilenet(models, leaf_node_labels, test_loader, device)
+
+            for i in range(len(models)):
+                torch.save(models[i].state_dict(), './saved/parallel_mobilenet' + str(i) + '.pth')
+        else:
+            for i in range(len(models)):
+                models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
+            test_parallel_mobilenet(models, leaf_node_labels, test_loader, device)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
