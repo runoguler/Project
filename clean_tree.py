@@ -15,21 +15,16 @@ def train_tree(models, train_loader, device, epoch, args):
     models[1].train()
     models[2].train()
 
-    loss_b1 = torch.nn.CrossEntropyLoss()
-    loss_b2 = torch.nn.CrossEntropyLoss()
-    loss_b1.to(device)
-    loss_b2.to(device)
+    lossfn = torch.nn.CrossEntropyLoss()
+    lossfn.to(device)
 
-    optim_b1 = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()), lr=args.lr,
-                                betas=(0.5, 0.999))
-    optim_b2 = torch.optim.Adam(list(models[0].parameters()) + list(models[2].parameters()), lr=args.lr,
+    optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()), lr=args.lr,
                                 betas=(0.5, 0.999))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        optim_b1.zero_grad()
-        optim_b2.zero_grad()
+        optim.zero_grad()
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
@@ -41,18 +36,17 @@ def train_tree(models, train_loader, device, epoch, args):
         b1_labels[b1_labels > 4] = 5
         b2_labels[b2_labels < 0] = 5
 
-        b1_loss = loss_b1(out_b1, b1_labels)
-        b1_loss.backward(retain_graph=True)  ## retain_graph=True
-        optim_b1.step()
+        loss1 = lossfn(out_b1, b1_labels)
+        loss2 = lossfn(out_b2, b2_labels)
 
-        b2_loss = loss_b2(out_b2, b2_labels)
-        b2_loss.backward()
-        optim_b2.step()
+        loss = loss1 + loss2
+        loss.backward()
+        optim.step()
 
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader), b1_loss.item(), b2_loss.item()))
+                       100. * batch_idx / len(train_loader), loss1.item(), loss2.item()))
 
 
 def test_tree(models, test_loader, device):
@@ -60,14 +54,7 @@ def test_tree(models, test_loader, device):
     models[1].eval()
     models[2].eval()
 
-    # correct_b1 = 0
-    # correct_b2 = 0
-    corrects = 0
-    no_class = 0
-    both_class = 0
-    false_in_class = 0
-    correct_from_both = 0
-    max_correct_from_both = 0
+    corrects, no_class, both_class, false_in_class, correct_from_both, max_correct_from_both = 0, 0, 0, 0, 0, 0
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
@@ -105,21 +92,11 @@ def test_tree(models, test_loader, device):
                                 labels[i].item() == (pred_b2[i].item() + 5)):
                             max_correct_from_both += 1
 
-        # out = torch.cat((out_b1, out_b2), dim=1)
-
-        # pred = out.max(1, keepdim=True)[1]
-        # corrects += pred.eq(labels.view_as(pred)).sum().item()
-
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
         corrects, len(test_loader.dataset),
         100. * corrects / len(test_loader.dataset),
         false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
     ))
-
-    # print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
-    #     corrects, len(test_loader.dataset),
-    #     100. * corrects / len(test_loader.dataset)
-    # ))
 
 
 def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args):
@@ -291,46 +268,42 @@ def test_net(model, test_loader, device):
 
 
 def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args):
-    parameters = list()
+    optims = []
     for model in models:
         model.train()
-        parameters += list(model.parameters())
+        optims.append(torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999)))
 
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
 
-    optim = torch.optim.Adam(parameters, lr=args.lr, betas=(0.5, 0.999))
-
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        optim.zero_grad()
-        losses = 0
+        lss_list = []
         for i in range(len(models)):
+            optims[i].zero_grad()
             output = models[i](data)
 
             lbls = labels.clone()
             for l in range(len(lbls)):
-                if isinstance(leaf_node_labels[i], int):
-                    if lbls[l].item() == leaf_node_labels[i]:
-                        lbls[l] = 0
-                    else:
-                        lbls[l] = 1
+                if lbls[l].item() in leaf_node_labels[i]:
+                    lbls[l] = leaf_node_labels[i].index(lbls[l])
                 else:
-                    if lbls[l].item() in leaf_node_labels[i]:
-                        lbls[l] = leaf_node_labels[i].index(lbls[l])
-                    else:
-                        lbls[l] = len(leaf_node_labels[i])
+                    lbls[l] = len(leaf_node_labels[i])
 
-            losses += loss(output, lbls)
-
-        losses.backward()
-        optim.step()
+            lss = loss(output, lbls)
+            lss_list.append(lss)
+            lss.backward()
+            optims[i].step()
 
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
+            for loss in lss_list:
+                p_str += '\tLoss: {:.6f}'.format(loss.item())
+
+            print(p_str.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader), losses.item()))
+                       100. * batch_idx / len(train_loader)))
 
 
 def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
@@ -463,7 +436,7 @@ def find_leaf_node_labels(root_node, level):
         right = node.right
 
         if isinstance(left, int):
-            leaf_node_labels.append(left)
+            leaf_node_labels.append((left))
         else:
             if left.count > 3 and lvl < level:
                 search.append((left, lvl))
@@ -471,7 +444,7 @@ def find_leaf_node_labels(root_node, level):
                 leaf_node_labels.append(left.value)
 
         if isinstance(right, int):
-            leaf_node_labels.append(right)
+            leaf_node_labels.append((right))
         else:
             if right.count > 3 and lvl < level:
                 search.append((right, lvl))
