@@ -666,7 +666,7 @@ def main():
         models = []
         for i in leaf_node_labels:
             branches = 2 if isinstance(i, int) else len(i) + 1
-            models.append(MobileNet(num_classes=branches, channels=cfg).to(device))
+            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=(1024 // len(leaf_node_labels))).to(device))
 
         print(root_node)
 
