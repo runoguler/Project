@@ -273,8 +273,8 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         model.train()
         optims.append(torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999)))
 
-    loss = torch.nn.CrossEntropyLoss()
-    loss.to(device)
+    lossfn = torch.nn.CrossEntropyLoss()
+    lossfn.to(device)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -291,7 +291,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                 else:
                     lbls[l] = len(leaf_node_labels[i])
 
-            lss = loss(output, lbls)
+            lss = lossfn(output, lbls)
             lss_list.append(lss)
             lss.backward()
             optims[i].step()
