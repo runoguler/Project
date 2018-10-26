@@ -658,12 +658,15 @@ def main():
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device, use_cuda)
     elif args.parallel_mobile_nets:
+        cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         root_node = utils.generate(10, 80, resume)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
+        for i in range(len(cfg)):
+            cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (cfg[i][0] // len(leaf_node_labels), cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = 2 if isinstance(i, int) else len(i) + 1
-            models.append(MobileNet(num_classes=branches).to(device))
+            models.append(MobileNet(num_classes=branches, channels=cfg).to(device))
 
         print(root_node)
 
