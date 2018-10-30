@@ -400,7 +400,7 @@ def generate_model_list(root_node, level, device):
         else:
             models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
             nodes.append(None)
-            leaf_node_labels.append((left))
+            leaf_node_labels.append((left,))
 
         # RIGHT BRANCH
         right = nodes[index][0].right
@@ -416,7 +416,7 @@ def generate_model_list(root_node, level, device):
         else:
             models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
             nodes.append(None)
-            leaf_node_labels.append((right))
+            leaf_node_labels.append((right,))
 
         index += 1
         remaining -= 1
@@ -436,7 +436,7 @@ def find_leaf_node_labels(root_node, level):
         right = node.right
 
         if isinstance(left, int):
-            leaf_node_labels.append((left))
+            leaf_node_labels.append((left,))
         else:
             if left.count > 3 and lvl < level:
                 search.append((left, lvl))
@@ -444,7 +444,7 @@ def find_leaf_node_labels(root_node, level):
                 leaf_node_labels.append(left.value)
 
         if isinstance(right, int):
-            leaf_node_labels.append((right))
+            leaf_node_labels.append((right,))
         else:
             if right.count > 3 and lvl < level:
                 search.append((right, lvl))
