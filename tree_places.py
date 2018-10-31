@@ -505,7 +505,7 @@ def main():
     val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
-        model = MobileNet(num_classes=365).to(device)
+        model = MobileNet(num_classes=365, fcl=(64*1024)).to(device)
 
         if not test:
             if resume:
