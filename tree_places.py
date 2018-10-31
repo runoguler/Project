@@ -505,7 +505,7 @@ def main():
     val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
-        model = MobileNet().to(device)
+        model = MobileNet(num_classes=365).to(device)
 
         if not test:
             if resume:
@@ -541,7 +541,7 @@ def main():
 
             test_tree(models, val_loader, device)
     elif args.mobile_tree_net:
-        root_node = utils.generate(10, 80, resume)
+        root_node = utils.generate(365, 1000, resume, prob=0.3)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
 
         if not test:
