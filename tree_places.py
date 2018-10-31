@@ -485,9 +485,8 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
-    traindir = os.path.join('../data/places365/places365_standard', 'train')
-    valdir = os.path.join('../data/places365/places365_standard', 'val')
-    testdir = os.path.join('../data/places365', 'test256')
+    traindir = os.path.join('../places365/places365_standard', 'train')
+    valdir = os.path.join('../places365/places365_standard', 'val')
 
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
@@ -500,16 +499,10 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
-    test_data_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
-    ])
     places_training_data = datasets.ImageFolder(traindir, transform=train_data_transform)
     places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
-    places_test_data = datasets.ImageFolder(testdir, transform=test_data_transform)
     train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
     val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
-    test_loader = torch.utils.data.DataLoader(places_test_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
         model = MobileNet().to(device)
@@ -523,7 +516,7 @@ def main():
             torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
-            test_net(model, test_loader, device)
+            test_net(model, val_loader, device)
     elif args.mobile_static_tree_net:
         models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
@@ -546,7 +539,7 @@ def main():
             models[1].load_state_dict(torch.load('./saved/branch1.pth'))
             models[2].load_state_dict(torch.load('./saved/branch2.pth'))
 
-            test_tree(models, test_loader, device)
+            test_tree(models, val_loader, device)
     elif args.mobile_tree_net:
         root_node = utils.generate(10, 80, resume)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
@@ -569,7 +562,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, val_loader, device)
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         root_node = utils.generate(10, 80, resume)
@@ -597,7 +590,7 @@ def main():
         else:
             for i in range(len(models)):
                 models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
-            test_parallel_mobilenet(models, leaf_node_labels, test_loader, device)
+            test_parallel_mobilenet(models, leaf_node_labels, val_loader, device)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
@@ -620,7 +613,7 @@ def main():
             models[1].load_state_dict(torch.load('./saved/branch1.pth'))
             models[2].load_state_dict(torch.load('./saved/branch2.pth'))
 
-            test_tree(models, test_loader, device)
+            test_tree(models, val_loader, device)
 
 
 if __name__ == '__main__':
