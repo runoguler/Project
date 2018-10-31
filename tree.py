@@ -597,7 +597,7 @@ def main():
             torch.save(model.state_dict(), './saved/simplenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/simplenet.pth'))
-            test(model, test_loader, device)
+            test_net(model, test_loader, device)
     elif args.mobile_net:
         model = MobileNet().to(device)
 
@@ -610,7 +610,7 @@ def main():
             torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
-            test(model, test_loader, device)
+            test_net(model, test_loader, device)
     elif args.mobile_static_tree_net:
         models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor

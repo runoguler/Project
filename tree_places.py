@@ -8,6 +8,7 @@ from models.mobile_static_tree_net import StaticTreeRootNet, StaticTreeBranchNet
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
 
 import utils
+import os
 
 
 def train_tree(models, train_loader, device, epoch, args):
@@ -484,21 +485,31 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
+    traindir = os.path.join('../data/places365/places365_standard', 'train')
+    valdir = os.path.join('../data/places365/places365_standard', 'val')
+    testdir = os.path.join('../data/places365', 'test256')
+
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
         transforms.RandomAffine(45, (0.2, 0.2)),
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+    ])
+    val_data_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
     test_data_transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
-    cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
-    cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=test_data_transform)
-    train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
-    test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    places_training_data = datasets.ImageFolder(traindir, transform=train_data_transform)
+    places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
+    places_test_data = datasets.ImageFolder(testdir, transform=test_data_transform)
+    train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+    val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    test_loader = torch.utils.data.DataLoader(places_test_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
         model = MobileNet().to(device)
@@ -508,7 +519,7 @@ def main():
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_net(model, train_loader, device, epoch, args)
-                test_net(model, test_loader, device)
+                test_net(model, val_loader, device)
             torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -524,7 +535,7 @@ def main():
                 models[2].load_state_dict(torch.load('./saved/branch2.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_tree(models, train_loader, device, epoch, args)
-                test_tree(models, test_loader, device)
+                test_tree(models, val_loader, device)
 
             torch.save(models[0].state_dict(), './saved/root.pth')
             torch.save(models[1].state_dict(), './saved/branch1.pth')
@@ -547,7 +558,7 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+                test_dynamic_tree(models, leaf_node_labels, val_loader, device)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -579,7 +590,7 @@ def main():
                     models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_parallel_mobilenet(models, leaf_node_labels, test_loader, device)
+                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device)
 
             for i in range(len(models)):
                 torch.save(models[i].state_dict(), './saved/parallel_mobilenet' + str(i) + '.pth')
@@ -598,7 +609,7 @@ def main():
                 models[2].load_state_dict(torch.load('./saved/branch2.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_tree(models, train_loader, device, epoch, args)
-                test_tree(models, test_loader, device)
+                test_tree(models, val_loader, device)
 
             torch.save(models[0].state_dict(), './saved/root.pth')
             torch.save(models[1].state_dict(), './saved/branch1.pth')
