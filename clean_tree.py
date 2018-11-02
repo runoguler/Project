@@ -23,17 +23,11 @@ def train_tree(models, train_loader, device, epoch, args):
     lossfn3 = torch.nn.CrossEntropyLoss().to(device)
     lossfn4 = torch.nn.CrossEntropyLoss().to(device)
 
-    optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()), lr=args.lr,
+    optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()) + list(models[3].parameters()) + list(models[4].parameters()) + list(models[5].parameters()), lr=args.lr,
                                 betas=(0.5, 0.999))
-    optim2 = torch.optim.Adam(list(models[3].parameters()) + list(models[4].parameters()) + list(models[5].parameters()),
-                             lr=args.lr,
-                             betas=(0.5, 0.999))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
-
-
-
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
@@ -57,13 +51,10 @@ def train_tree(models, train_loader, device, epoch, args):
 
         loss = loss1 + loss2
         losss = loss3 + loss4
+        lossx = loss + losss
         optim.zero_grad()
-        loss.backward()
+        lossx.backward()
         optim.step()
-
-        optim2.zero_grad()
-        losss.backward()
-        optim2.step()
 
         if batch_idx % args.log_interval == 0:
             print('Train Epoch1: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
