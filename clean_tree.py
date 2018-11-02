@@ -18,8 +18,10 @@ def train_tree(models, train_loader, device, epoch, args):
     models[4].train()
     models[5].train()
 
-    lossfn = torch.nn.CrossEntropyLoss()
-    lossfn.to(device)
+    lossfn1 = torch.nn.CrossEntropyLoss().to(device)
+    lossfn2 = torch.nn.CrossEntropyLoss().to(device)
+    lossfn3 = torch.nn.CrossEntropyLoss().to(device)
+    lossfn4 = torch.nn.CrossEntropyLoss().to(device)
 
     optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()), lr=args.lr,
                                 betas=(0.5, 0.999))
@@ -30,8 +32,8 @@ def train_tree(models, train_loader, device, epoch, args):
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        optim.zero_grad()
-        optim2.zero_grad()
+
+
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
@@ -47,17 +49,20 @@ def train_tree(models, train_loader, device, epoch, args):
         b1_labels[b1_labels > 4] = 5
         b2_labels[b2_labels < 0] = 5
 
-        loss1 = lossfn(out_b1, b1_labels)
-        loss2 = lossfn(out_b2, b2_labels)
+        loss1 = lossfn1(out_b1, b1_labels)
+        loss2 = lossfn2(out_b2, b2_labels)
 
-        loss3 = lossfn(out_b3, b1_labels)
-        loss4 = lossfn(out_b4, b2_labels)
+        loss3 = lossfn3(out_b3, b1_labels)
+        loss4 = lossfn4(out_b4, b2_labels)
 
         loss = loss1 + loss2
         losss = loss3 + loss4
+        optim.zero_grad()
         loss.backward()
-        losss.backward()
         optim.step()
+
+        optim2.zero_grad()
+        losss.backward()
         optim2.step()
 
         if batch_idx % args.log_interval == 0:
