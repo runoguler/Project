@@ -492,10 +492,12 @@ def main():
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
         transforms.RandomAffine(45, (0.2, 0.2)),
+        transforms.Resize((128,128)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
     val_data_transform = transforms.Compose([
+        transforms.Resize((128, 128)),
         transforms.ToTensor(),
         transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
     ])
@@ -505,7 +507,7 @@ def main():
     val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
-        model = MobileNet(num_classes=365, fcl=(64*1024)).to(device)
+        model = MobileNet(num_classes=365, fcl=(4*4*1024)).to(device)
 
         if not test:
             if resume:
