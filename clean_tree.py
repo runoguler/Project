@@ -475,7 +475,6 @@ def main():
     parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.01)')
     parser.add_argument('--num-workers', type=int, default=1, metavar='N', help='number of workers for cuda')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
-    parser.add_argument('--try-again', action='store_true')
     args = parser.parse_args()
 
     test = args.test
@@ -486,6 +485,9 @@ def main():
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
     train_data_transform = transforms.Compose([
+        transforms.RandomHorizontalFlip(0.4),
+        transforms.RandomRotation(20),
+        transforms.RandomAffine(45, (0.2, 0.2)),
         transforms.ToTensor(),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     ])
@@ -495,8 +497,8 @@ def main():
     ])
     cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
     cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=test_data_transform)
-    train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=False, **cuda_args)
-    test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=False, **cuda_args)
+    train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+    test_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
     if args.mobile_net:
         model = MobileNet().to(device)
@@ -512,22 +514,7 @@ def main():
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test_net(model, test_loader, device)
     elif args.mobile_static_tree_net:
-        if args.try_again:
-            m1 = StaticTreeRootNet().to(device)
-            m2 = StaticTreeBranchNet().to(device)
-            m3 = StaticTreeBranchNet().to(device)
-            m1.load_state_dict(torch.load('./saved/m1.pth'))
-            m2.load_state_dict(torch.load('./saved/m2.pth'))
-            m3.load_state_dict(torch.load('./saved/m3.pth'))
-        else:
-            m1 = StaticTreeRootNet().to(device)
-            m2 = StaticTreeBranchNet().to(device)
-            m3 = StaticTreeBranchNet().to(device)
-            torch.save(m1.state_dict(), './saved/m1.pth')
-            torch.save(m2.state_dict(), './saved/m2.pth')
-            torch.save(m3.state_dict(), './saved/m3.pth')
-
-        models = [m1, m2, m3]
+        models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
         if not test:
