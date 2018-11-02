@@ -14,21 +14,32 @@ def train_tree(models, train_loader, device, epoch, args):
     models[0].train()
     models[1].train()
     models[2].train()
+    models[3].train()
+    models[4].train()
+    models[5].train()
 
     lossfn = torch.nn.CrossEntropyLoss()
     lossfn.to(device)
 
     optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()), lr=args.lr,
                                 betas=(0.5, 0.999))
+    optim2 = torch.optim.Adam(list(models[3].parameters()) + list(models[4].parameters()) + list(models[5].parameters()),
+                             lr=args.lr,
+                             betas=(0.5, 0.999))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
         optim.zero_grad()
+        optim2.zero_grad()
 
         layer = models[0](data)
         out_b1, _ = models[1](layer)
         out_b2, _ = models[2](layer)
+
+        layer2 = models[3](data)
+        out_b3, _ = models[4](layer2)
+        out_b4, _ = models[5](layer2)
 
         b1_labels = labels.clone()
         b2_labels = labels.clone() - 5
@@ -39,22 +50,36 @@ def train_tree(models, train_loader, device, epoch, args):
         loss1 = lossfn(out_b1, b1_labels)
         loss2 = lossfn(out_b2, b2_labels)
 
+        loss3 = lossfn(out_b3, b1_labels)
+        loss4 = lossfn(out_b4, b2_labels)
+
         loss = loss1 + loss2
+        losss = loss3 + loss4
         loss.backward()
+        losss.backward()
         optim.step()
+        optim2.step()
 
         if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
+            print('Train Epoch1: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                        100. * batch_idx / len(train_loader), loss1.item(), loss2.item()))
+        if batch_idx % args.log_interval == 0:
+            print('Train Epoch2: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                       100. * batch_idx / len(train_loader), loss3.item(), loss4.item()))
 
 
 def test_tree(models, test_loader, device):
     models[0].eval()
     models[1].eval()
     models[2].eval()
+    models[3].eval()
+    models[4].eval()
+    models[5].eval()
 
     corrects, no_class, both_class, false_in_class, correct_from_both, max_correct_from_both = 0, 0, 0, 0, 0, 0
+    corrects2, no_class2, both_class2, false_in_class2, correct_from_both2, max_correct_from_both2 = 0, 0, 0, 0, 0, 0
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
@@ -63,8 +88,14 @@ def test_tree(models, test_loader, device):
         out_b1, _ = models[1](layer)
         out_b2, _ = models[2](layer)
 
+        layer2 = models[3](data)
+        out_b3, _ = models[4](layer2)
+        out_b4, _ = models[5](layer2)
+
         pred_b1 = out_b1.max(1, keepdim=True)[1]
         pred_b2 = out_b2.max(1, keepdim=True)[1]
+        pred_b3 = out_b3.max(1, keepdim=True)[1]
+        pred_b4 = out_b4.max(1, keepdim=True)[1]
 
         for i in range(labels.size(0)):
             if pred_b1[i] == 5:
@@ -92,10 +123,42 @@ def test_tree(models, test_loader, device):
                                 labels[i].item() == (pred_b2[i].item() + 5)):
                             max_correct_from_both += 1
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
+        for i in range(labels.size(0)):
+            if pred_b3[i] == 5:
+                if pred_b4[i] == 5:
+                    no_class2 += 1
+                else:
+                    if labels[i].item() == (pred_b4[i].item() + 5):
+                        corrects2 += 1
+                    else:
+                        false_in_class2 += 1
+            else:
+                if pred_b4[i] == 5:
+                    if labels[i].item() == pred_b3[i].item():
+                        corrects2 += 1
+                    else:
+                        false_in_class2 += 1
+                else:
+                    both_class2 += 1
+                    if (labels[i].item() == (pred_b4[i].item() + 5)) or (labels[i].item() == pred_b3[i].item()):
+                        correct_from_both2 += 1
+                        if (out_b3[i][pred_b3[i].item()].item() > out_b4[i][pred_b4[i].item()].item()) and (
+                                labels[i].item() == pred_b3[i].item()):
+                            max_correct_from_both2 += 1
+                        elif (out_b4[i][pred_b4[i].item()].item() > out_b3[i][pred_b3[i].item()].item()) and (
+                                labels[i].item() == (pred_b4[i].item() + 5)):
+                            max_correct_from_both2 += 1
+
+    print('\nTest set1: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
         corrects, len(test_loader.dataset),
         100. * corrects / len(test_loader.dataset),
         false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
+    ))
+
+    print('\nTest set2: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
+        corrects2, len(test_loader.dataset),
+        100. * corrects2 / len(test_loader.dataset),
+        false_in_class2, no_class2, both_class2, correct_from_both2, max_correct_from_both2
     ))
 
 
@@ -514,7 +577,16 @@ def main():
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test_net(model, test_loader, device)
     elif args.mobile_static_tree_net:
-        models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
+        m1 = StaticTreeRootNet().to(device)
+        m2 = StaticTreeBranchNet().to(device)
+        m3 = StaticTreeBranchNet().to(device)
+        m4 = StaticTreeRootNet().to(device)
+        m5 = StaticTreeBranchNet().to(device)
+        m6 = StaticTreeBranchNet().to(device)
+        m4.load_state_dict(m1.state_dict())
+        m5.load_state_dict(m2.state_dict())
+        m6.load_state_dict(m3.state_dict())
+        models = [m1, m2, m3, m4, m5, m6]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
 
         if not test:
