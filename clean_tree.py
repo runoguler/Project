@@ -101,56 +101,51 @@ def test_tree(models, test_loader, device):
 
 def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args):
     leaf_node_index = []
-    leaf_node_paths = []  # NOT INCLUDING models[0]
 
+    list_of_model_params = list()
     for i in range(len(models)):
         if not models[i] is None:
             models[i].train()
+            list_of_model_params += models[i].parameters()
             if isinstance(models[i], MobileTreeLeafNet):
                 leaf_node_index.append(i)
 
-    losses = []
-    optims = []
-    for i in leaf_node_index:
-        path = []
-        while i > 0:
-            path = [i] + path
-            i = (i + 1) // 2 - 1
-        model_path = list(models[0].parameters())
-        for i in path:
-            model_path += list(models[i].parameters())
-
-        leaf_node_paths.append(path)
-        losses.append(torch.nn.CrossEntropyLoss().to(device))
-        optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
+    lossfn = torch.nn.CrossEntropyLoss().to(device)
+    optim = torch.optim.Adam(list_of_model_params, lr=args.lr, betas=(0.5, 0.999))
+    optim.zero_grad()
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        for i in range(len(optims)):
-            optims[i].zero_grad()
-
         losses_to_print = []
-        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j + 1 == len(leaf_node_paths[i]):
-                    result, _ = models[k](layer)
-
-                    lbls = labels.clone()
-                    for l in range(len(lbls)):
-                        if lbls[l].item() in leaf_node_labels[i]:
-                            lbls[l] = leaf_node_labels[i].index(lbls[l])
-                        else:
-                            lbls[l] = len(leaf_node_labels[i])
-
-                    l = losses[i](result, lbls)
-                    l.backward(retain_graph=True)
-                    optims[i].step()
-                    losses_to_print.append(l)
+        leaf_node_results = []
+        sum_of_losses = 0
+        results = [None] * len(models)
+        results[0] = models[0](data)
+        for i in range(1, len(models)):
+            if not models[i] is None:
+                prev = (i + 1) // 2 - 1
+                if i in leaf_node_index:
+                    res, _ = models[i](results[prev])
+                    results[i] = res
+                    leaf_node_results.append(res)
                 else:
-                    layer = models[k](layer)
+                    results[i] = models[i](results[prev])
+
+        for i in range(len(leaf_node_results)):
+            lbls = labels.clone()
+            for l in range(len(lbls)):
+                if lbls[l].item() in leaf_node_labels[i]:
+                    lbls[l] = leaf_node_labels[i].index(lbls[l])
+                else:
+                    lbls[l] = len(leaf_node_labels[i])
+
+            l = lossfn[i](leaf_node_results[i], lbls)
+            sum_of_losses += l
+            losses_to_print.append(l)
+
+        sum_of_losses.backward()
+        optim.step()
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
