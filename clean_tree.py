@@ -615,6 +615,7 @@ def generate_model_list(root_node, level, device):
         index += 1
         remaining -= 1
     print(root_node)
+    print(leaf_node_labels)
     return models, leaf_node_labels
 
 
