@@ -665,8 +665,8 @@ def main():
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net-beta', action='store_true', help='train mobile-tree-net-beta instead of tree-net')
-    parser.add_argument('--mobile-tree-net_old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
-    parser.add_argument('--mobile-tree-net_old_lc', action='store_true', help='train mobile-tree-net-old-loss-common instead of tree-net')
+    parser.add_argument('--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
+    parser.add_argument('--mobile-tree-net-old-lc', action='store_true', help='train mobile-tree-net-old-loss-common instead of tree-net')
     parser.add_argument('--depth', type=int, default=depth, choices=[1, 2, 3, 4], metavar='lvl', help='depth of the tree')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 1000)')
@@ -737,6 +737,7 @@ def main():
 
             test_tree(models, test_loader, device)
     elif args.mobile_tree_net:
+        print("Mobile Tree Net\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
@@ -761,6 +762,7 @@ def main():
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device)
     elif args.mobile_tree_net_beta:
+        print("Mobile Tree Net Beta\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
@@ -785,6 +787,7 @@ def main():
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device)
     elif args.mobile_tree_net_old:
+        print("Mobile Tree Net Old\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
@@ -809,6 +812,7 @@ def main():
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device)
     elif args.mobile_tree_net_old_lc:
+        print("Mobile Tree Net Old Lc\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
@@ -833,6 +837,7 @@ def main():
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device)
     elif args.parallel_mobile_nets:
+        print("Parallel Mobile Nets\n")
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
