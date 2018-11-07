@@ -428,7 +428,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
     ))
 
 
-def generate_model_list(root_node, level, device):
+def generate_model_list(root_node, level, device, fcl_factor):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
     root_step = 1
@@ -466,11 +466,11 @@ def generate_model_list(root_node, level, device):
                 nodes.append((left, lvl))
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(left.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
+                models.append(MobileTreeLeafNet(branch=(left.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(left.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
             nodes.append(None)
             leaf_node_labels.append((left,))
 
@@ -482,11 +482,11 @@ def generate_model_list(root_node, level, device):
                 nodes.append((right, lvl))
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(right.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
+                models.append(MobileTreeLeafNet(branch=(right.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(right.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]).to(device))
+            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
             nodes.append(None)
             leaf_node_labels.append((right,))
 
@@ -582,8 +582,10 @@ def main():
     train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
     val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
 
+    fcl_factor = args.resize // 32
+
     if args.mobile_net:
-        model = MobileNet(num_classes=365, fcl=(4*4*1024)).to(device)
+        model = MobileNet(num_classes=365, fcl=(fcl_factor*fcl_factor*1024)).to(device)
 
         if not test:
             if resume:
@@ -620,7 +622,7 @@ def main():
             test_tree(models, val_loader, device)
     elif args.mobile_tree_net:
         root_node = utils.generate(365, 1000, resume, prob=0.3)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
             if resume:
@@ -645,7 +647,7 @@ def main():
         print("Mobile Tree Net Old\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
             if resume:
@@ -676,7 +678,7 @@ def main():
         models = []
         for i in leaf_node_labels:
             branches = 2 if isinstance(i, int) else len(i) + 1
-            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=(1024 // len(leaf_node_labels))).to(device))
+            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // len(leaf_node_labels))).to(device))
 
         print(root_node)
 
