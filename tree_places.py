@@ -621,7 +621,9 @@ def main():
 
             test_tree(models, val_loader, device)
     elif args.mobile_tree_net:
-        root_node = utils.generate(365, 1000, resume, prob=0.3)
+        print("Mobile Tree Net\n")
+        load = resume or test or same
+        root_node = utils.generate(365, 1000, load, prob=0.3)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
@@ -646,7 +648,7 @@ def main():
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old\n")
         load = resume or test or same
-        root_node = utils.generate(10, 80, load)
+        root_node = utils.generate(365, 1000, load, prob=0.3)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
