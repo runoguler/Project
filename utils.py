@@ -95,10 +95,10 @@ def generate(classes, samples, load=False, prob=0.3):
 def main():
     np.set_printoptions(linewidth=320)
 
-    classes = 10
-    samples = 80
+    classes = 365
+    samples = 1000
 
-    preference_table = generate_preference_table(classes, samples)
+    preference_table = generate_preference_table(classes, samples, prob=0.5)
     np.save('preference_table', preference_table)
     print('Preference Table: \n', preference_table)
     print('Correlations: \n', np.corrcoef(preference_table))

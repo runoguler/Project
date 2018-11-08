@@ -187,7 +187,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
 
         leaf_node_paths.append(path)
         losses.append(torch.nn.CrossEntropyLoss().to(device))
-        optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
+        optims.append(torch.optim.Adam(model_path, lr=args.lr))
 
 
     for batch_idx, (data, labels) in enumerate(train_loader):
@@ -493,6 +493,9 @@ def generate_model_list(root_node, level, device, fcl_factor):
         index += 1
         remaining -= 1
     print(root_node)
+    print(leaf_node_labels)
+    for lbls in leaf_node_labels:
+        print(len(lbls))
     return models, leaf_node_labels
 
 
