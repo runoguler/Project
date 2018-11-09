@@ -223,9 +223,8 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
     leaf_node_index = []
     leaf_node_paths = []    # NOT INCLUDING models[0]
 
-    if not args.no_weights:
-        number_of_classes = 10
-        FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+    number_of_classes = 10
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     for i in range(len(models)):
         if not models[i] is None:
@@ -243,10 +242,11 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
         model_path = list(models[0].parameters())
         for i in path:
             model_path += list(models[i].parameters())
+        leaf_node_paths.append(path)
+
         if args.no_weights:
             losses.append(torch.nn.CrossEntropyLoss().to(device))
         else:
-            leaf_node_paths.append(path)
             weights = [1.0] * (len(leaf_node_labels[j]) + 1)
             weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
