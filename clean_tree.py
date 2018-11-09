@@ -2,6 +2,9 @@ import argparse
 import torch
 from torchvision import datasets, transforms
 
+import logging
+import time
+
 from models.tree_net import TreeRootNet, TreeBranchNet
 from models.mobilenet import MobileNet
 from models.mobile_static_tree_net import StaticTreeRootNet, StaticTreeBranchNet
@@ -215,10 +218,13 @@ def train_dynamic_tree_beta(models, leaf_node_labels, train_loader, device, epoc
                        100. * batch_idx / len(train_loader)))
 
 
-def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args):
+def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     '''Loss fn and Optims not common, slow version'''
     leaf_node_index = []
     leaf_node_paths = []    # NOT INCLUDING models[0]
+
+    number_of_classes = 10
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     for i in range(len(models)):
         if not models[i] is None:
@@ -238,7 +244,10 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
             model_path += list(models[i].parameters())
 
         leaf_node_paths.append(path)
-        losses.append(torch.nn.CrossEntropyLoss().to(device))
+        weights = [1.0] * len(leaf_node_labels[i] + 1)
+        weights[-1] = 1.0 / (number_of_classes - len(leaf_node_labels))
+
+        losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
         optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
 
 
@@ -356,7 +365,7 @@ def train_dynamic_tree_old_loss_common(models, leaf_node_labels, train_loader, d
                        100. * batch_idx / len(train_loader)))
 
 
-def test_dynamic_tree(models, leaf_node_labels, test_loader, device):
+def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
     leaf_node_index = []
     leaf_node_paths = []  # NOT INCLUDING models[0]
 
@@ -412,6 +421,12 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device):
             else:
                 wrong += 1
 
+    if args.log:
+        logging.info('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
+            (definite_correct + indefinite_correct), len(test_loader.dataset),
+            100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
+            definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+        ))
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.dataset),
         100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
@@ -616,6 +631,8 @@ def generate_model_list(root_node, level, device):
         remaining -= 1
     print(root_node)
     print(leaf_node_labels)
+    for lbls in leaf_node_labels:
+        print(len(lbls))
     return models, leaf_node_labels
 
 
@@ -659,6 +676,7 @@ def main():
     parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
     parser.add_argument('--test', action='store_true', help='enable test mode')
     parser.add_argument('--resume', action='store_true', help='resume training')
+    parser.add_argument('--log', action='store_true', help='log the events')
     parser.add_argument('--same', action='store_true', help='use same user preference table to generate the tree')
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
@@ -679,6 +697,11 @@ def main():
     test = args.test
     resume = args.resume
     same = args.same
+
+    start_time = time.time()
+    if args.log:
+        logging.basicConfig(filename="mainlog.log")
+        logging.info(start_time)
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -749,7 +772,7 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -760,7 +783,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
     elif args.mobile_tree_net_beta:
         print("Mobile Tree Net Beta\n")
         load = resume or test or same
@@ -774,7 +797,7 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree_beta(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -785,21 +808,26 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old\n")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
-
+        if args.log:
+            logging.info("Mobile Tree Net Old\n")
+            logging.info(root_node)
+            logging.info(leaf_node_labels)
+            for lbls in leaf_node_labels:
+                logging.info(len(lbls))
         if not test:
             if resume:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+                train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -810,7 +838,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
     elif args.mobile_tree_net_old_lc:
         print("Mobile Tree Net Old Lc\n")
         load = resume or test or same
@@ -824,7 +852,7 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree_old_loss_common(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -835,7 +863,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
     elif args.parallel_mobile_nets:
         print("Parallel Mobile Nets\n")
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
@@ -889,6 +917,11 @@ def main():
             models[2].load_state_dict(torch.load('./saved/branch2.pth'))
 
             test_tree(models, test_loader, device)
+
+    if args.log:
+        end_time = time.time()
+        logging.info(end_time)
+        logging.info("--- %s seconds ---" % (end_time - start_time))
 
 
 if __name__ == '__main__':
