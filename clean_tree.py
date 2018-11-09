@@ -223,8 +223,9 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
     leaf_node_index = []
     leaf_node_paths = []    # NOT INCLUDING models[0]
 
-    number_of_classes = 10
-    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+    if not args.no_weights:
+        number_of_classes = 10
+        FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     for i in range(len(models)):
         if not models[i] is None:
@@ -234,7 +235,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
 
     losses = []
     optims = []
-    for i in leaf_node_index:
+    for j, i in enumerate(leaf_node_index):
         path = []
         while i > 0:
             path = [i] + path
@@ -242,12 +243,14 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
         model_path = list(models[0].parameters())
         for i in path:
             model_path += list(models[i].parameters())
+        if args.no_weights:
+            losses.append(torch.nn.CrossEntropyLoss().to(device))
+        else:
+            leaf_node_paths.append(path)
+            weights = [1.0] * (len(leaf_node_labels[j]) + 1)
+            weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels))
+            losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
-        leaf_node_paths.append(path)
-        weights = [1.0] * len(leaf_node_labels[i] + 1)
-        weights[-1] = 1.0 / (number_of_classes - len(leaf_node_labels))
-
-        losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
         optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
 
 
@@ -678,6 +681,7 @@ def main():
     parser.add_argument('--resume', action='store_true', help='resume training')
     parser.add_argument('--log', action='store_true', help='log the events')
     parser.add_argument('--same', action='store_true', help='use same user preference table to generate the tree')
+    parser.add_argument('--no-weights', action='store_true', help='train without class weights')
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
@@ -691,6 +695,7 @@ def main():
     parser.add_argument('--epochs', type=int, default=epochs, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.01)')
     parser.add_argument('--num-workers', type=int, default=1, metavar='N', help='number of workers for cuda')
+    parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
@@ -700,7 +705,7 @@ def main():
 
     start_time = time.time()
     if args.log:
-        logging.basicConfig(filename="mainlog.log")
+        logging.basicConfig(filename="mainlog.log", level=logging.INFO)
         logging.info(start_time)
 
     use_cuda = torch.cuda.is_available()
