@@ -582,9 +582,10 @@ def main():
     resume = args.resume
     same = args.same
 
-    start_time = time.time()
     if args.log:
+        start_time = time.time()
         logging.basicConfig(filename="mainlog.log", level=logging.INFO)
+        logging.info("\n---START---\n")
         logging.info(time.asctime(time.localtime(start_time)))
 
     use_cuda = torch.cuda.is_available()
@@ -616,7 +617,16 @@ def main():
 
     if args.mobile_net:
         model = MobileNet(num_classes=365, fcl=(fcl_factor*fcl_factor*1024)).to(device)
-
+        if args.log:
+            logging.info("Mobile-Net\n")
+            if resume:
+                logging.info("resume")
+            elif test:
+                logging.info("test")
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            logging.info("Size of Images: " + str(args.resize))
         if not test:
             if resume:
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -686,9 +696,19 @@ def main():
             logging.info(leaf_node_labels)
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
-        if not test:
             if resume:
                 logging.info("resume")
+            elif test:
+                logging.info("test")
+            elif same:
+                logging.info("same")
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Depth: " + str(args.depth))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            logging.info("Size of Images: " + str(args.resize))
+        if not test:
+            if resume:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
@@ -762,6 +782,7 @@ def main():
         end_time = time.time()
         logging.info(time.asctime(time.localtime(end_time)))
         logging.info("--- %s seconds ---" % (end_time - start_time))
+        logging.info("\n---END---\n")
 
 
 if __name__ == '__main__':
