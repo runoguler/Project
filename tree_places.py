@@ -554,8 +554,8 @@ def calculate_indices(data, labels):
         _, label = data[i]
         if label < labels:
             indices.append(i)
-        if i % 10000:
-            print('{}/{} ({:.0f}%)'.format(i, len(data), i))
+        if i % 50000 == 0:
+            print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
     print("Calculation Done")
     return indices
 
