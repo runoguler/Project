@@ -202,7 +202,6 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
 
         optims.append(torch.optim.Adam(model_path, lr=args.lr))
 
-
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
@@ -243,7 +242,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
                 p_str += '\tLoss: {:.6f}'.format(loss.item())
 
             print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
 
@@ -305,14 +304,14 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
 
     if args.log:
         logging.info('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
-            (definite_correct + indefinite_correct), len(test_loader.dataset),
-            100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
-            definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+            (definite_correct + indefinite_correct), len(test_loader.sampler),
+            100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+            definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
         ))
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
-        (definite_correct + indefinite_correct), len(test_loader.dataset),
-        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
-        definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+        (definite_correct + indefinite_correct), len(test_loader.sampler),
+        100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
     ))
 
 
@@ -555,6 +554,8 @@ def calculate_indices(data, labels):
         _, label = data[i]
         if label < labels:
             indices.append(i)
+        if i % 10000:
+            print('{}/{} ({:.0f}%)'.format(i, len(data), i))
     print("Calculation Done")
     return indices
 
