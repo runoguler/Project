@@ -684,10 +684,7 @@ def main():
     elif args.mobile_tree_net:
         print("Mobile Tree Net\n")
         load = resume or test or same
-        if no_classes == 365:
-            root_node = utils.generate(365, 1000, load, prob=0.3)
-        else:
-            root_node = utils.generate(no_classes, no_classes*5, load, prob=0.3)
+        root_node = utils.generate(365, 1000, load, prob=0.3)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
@@ -712,7 +709,10 @@ def main():
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old\n")
         load = resume or test or same
-        root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
+        if no_classes == 365:
+            root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
+        else:
+            root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
         if args.log:
             logging.info("Mobile Tree Net Old\n")
