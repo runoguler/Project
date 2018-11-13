@@ -550,10 +550,12 @@ def find_leaf_node_labels(root_node, level):
 
 def calculate_indices(data, labels):
     indices = []
+    print("Calculating Indices...")
     for i in range(len(data)):
         _, label = data[i]
         if label < labels:
             indices.append(i)
+    print("Calculation Done")
     return indices
 
 
@@ -637,7 +639,7 @@ def main():
     fcl_factor = args.resize // 32
 
     if args.mobile_net:
-        model = MobileNet(num_classes=365, fcl=(fcl_factor*fcl_factor*1024)).to(device)
+        model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
         if args.log:
             logging.info("Mobile-Net\n")
             if resume:
