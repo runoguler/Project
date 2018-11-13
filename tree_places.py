@@ -1,6 +1,7 @@
 import argparse
 import torch
 from torchvision import datasets, transforms
+from torch.utils.data.sampler import SubsetRandomSampler
 
 import logging
 import time
@@ -547,6 +548,15 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
+def calculate_indices(data, labels):
+    indices = []
+    for i in range(len(data)):
+        _, label = data[i]
+        if label < labels:
+            indices.append(i)
+    return indices
+
+
 def main():
     batch_size = 64
     test_batch_size = 1000
@@ -575,12 +585,15 @@ def main():
     parser.add_argument('--num-workers', type=int, default=1, metavar='N', help='number of workers for cuda')
     parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
+    parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
     test = args.test
     resume = args.resume
     same = args.same
+
+    no_classes = args.num_classes
 
     if args.log:
         start_time = time.time()
@@ -610,8 +623,16 @@ def main():
     ])
     places_training_data = datasets.ImageFolder(traindir, transform=train_data_transform)
     places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
-    train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
-    val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    if no_classes == 365:
+        train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+        val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    else:
+        train_indices = calculate_indices(places_training_data, no_classes)
+        test_indices = calculate_indices(places_validation_data, no_classes)
+        train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
+                                                   sampler=SubsetRandomSampler(train_indices), **cuda_args)
+        val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
+                                                   sampler=SubsetRandomSampler(test_indices), **cuda_args)
 
     fcl_factor = args.resize // 32
 
@@ -663,7 +684,10 @@ def main():
     elif args.mobile_tree_net:
         print("Mobile Tree Net\n")
         load = resume or test or same
-        root_node = utils.generate(365, 1000, load, prob=0.3)
+        if no_classes == 365:
+            root_node = utils.generate(365, 1000, load, prob=0.3)
+        else:
+            root_node = utils.generate(no_classes, no_classes*5, load, prob=0.3)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
 
         if not test:
@@ -673,7 +697,7 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, val_loader, device)
+                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -684,7 +708,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, val_loader, device)
+            test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old\n")
         load = resume or test or same
@@ -692,8 +716,6 @@ def main():
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
         if args.log:
             logging.info("Mobile Tree Net Old\n")
-            logging.info(root_node)
-            logging.info(leaf_node_labels)
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
             if resume:
