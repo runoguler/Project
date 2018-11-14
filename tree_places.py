@@ -51,7 +51,7 @@ def train_tree(models, train_loader, device, epoch, args):
 
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), loss1.item(), loss2.item()))
 
 
@@ -99,8 +99,8 @@ def test_tree(models, test_loader, device):
                             max_correct_from_both += 1
 
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
-        corrects, len(test_loader.dataset),
-        100. * corrects / len(test_loader.dataset),
+        corrects, len(test_loader.sampler),
+        100. * corrects / len(test_loader.sampler),
         false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
     ))
 
@@ -334,7 +334,7 @@ def train_net(model, train_loader, device, epoch, args):
 
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
 
@@ -354,8 +354,8 @@ def test_net(model, test_loader, device):
 
     test_loss /= len(test_loader.dataset)
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-        test_loss, correct, len(test_loader.dataset),
-        100. * correct / len(test_loader.dataset)))
+        test_loss, correct, len(test_loader.sampler),
+        100. * correct / len(test_loader.sampler)))
 
 
 def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args):
@@ -393,7 +393,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                 p_str += '\tLoss: {:.6f}'.format(loss.item())
 
             print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
 
@@ -441,9 +441,9 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
                 wrong += 1
 
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
-        (definite_correct + indefinite_correct), len(test_loader.dataset),
-        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
-        definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+        (definite_correct + indefinite_correct), len(test_loader.sampler),
+        100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
     ))
 
 
