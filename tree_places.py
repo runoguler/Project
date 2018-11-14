@@ -1,4 +1,5 @@
 import argparse
+import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data.sampler import SubsetRandomSampler
@@ -547,16 +548,20 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
-def calculate_indices(data, labels):
-    indices = []
-    print("Calculating Indices...")
-    for i in range(len(data)):
-        _, label = data[i]
-        if label < labels:
-            indices.append(i)
-        if i % 50000 == 0:
-            print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
-    print("Calculation Done")
+def calculate_indices(data, labels, load_indices):
+    if load_indices:
+        indices = np.load('indices.npy')
+    else:
+        indices = []
+        print("Calculating Indices...")
+        for i in range(len(data)):
+            _, label = data[i]
+            if label < labels:
+                indices.append(i)
+            if i % 50000 == 0:
+                print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
+        print("Calculation Done")
+        np.save('indices', indices)
     return indices
 
 
@@ -589,6 +594,7 @@ def main():
     parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
     parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes')
+    parser.add_argument('--load-indices', action='store_true', help='skip the calculation of indices by loading the last calculation')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
@@ -630,8 +636,8 @@ def main():
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
     else:
-        train_indices = calculate_indices(places_training_data, no_classes)
-        test_indices = calculate_indices(places_validation_data, no_classes)
+        train_indices = calculate_indices(places_training_data, no_classes, args.load_indices)
+        test_indices = calculate_indices(places_validation_data, no_classes, args.load_indices)
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                    sampler=SubsetRandomSampler(train_indices), **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
