@@ -338,7 +338,7 @@ def train_net(model, train_loader, device, epoch, args):
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
 
-def test_net(model, test_loader, device):
+def test_net(model, test_loader, device, args):
     model.eval()
     loss = torch.nn.CrossEntropyLoss(size_average=False)
     loss.to(device)
@@ -353,6 +353,10 @@ def test_net(model, test_loader, device):
         correct += pred.eq(labels.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
+    if args.log:
+        logging.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+            test_loss, correct, len(test_loader.sampler),
+            100. * correct / len(test_loader.sampler)))
     print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
         test_loss, correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)))
@@ -551,6 +555,7 @@ def find_leaf_node_labels(root_node, level):
 def calculate_indices(data, labels, load_indices):
     if load_indices:
         indices = np.load('indices.npy')
+        print("Indices Loaded")
     else:
         indices = []
         print("Calculating Indices...")
@@ -662,11 +667,11 @@ def main():
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_net(model, train_loader, device, epoch, args)
-                test_net(model, val_loader, device)
+                test_net(model, val_loader, device, args)
             torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
-            test_net(model, val_loader, device)
+            test_net(model, val_loader, device, args)
     elif args.mobile_static_tree_net:
         models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
