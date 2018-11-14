@@ -552,12 +552,15 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
-def calculate_indices(data, labels, load_indices):
+def calculate_indices(data, labels, load_indices, train_or_val=0):
+    indices = []
     if load_indices:
-        indices = np.load('indices.npy')
+        if train_or_val == 0:
+            indices = np.load('train_indices.npy')
+        elif train_or_val == 1:
+            indices = np.load('val_indices.npy')
         print("Indices Loaded")
     else:
-        indices = []
         print("Calculating Indices...")
         for i in range(len(data)):
             _, label = data[i]
@@ -566,7 +569,10 @@ def calculate_indices(data, labels, load_indices):
             if i % 50000 == 0:
                 print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
         print("Calculation Done")
-        np.save('indices', indices)
+        if train_or_val == 0:
+            np.save('train_indices.npy', indices)
+        elif train_or_val == 1:
+            np.save('val_indices.npy', indices)
     return indices
 
 
