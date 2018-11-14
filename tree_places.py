@@ -552,7 +552,7 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
-def calculate_indices(data, labels, load_indices, train_or_val=0):
+def calculate_indices(data, no_classes, load_indices, train_or_val):
     indices = []
     if load_indices:
         if train_or_val == 0:
@@ -564,7 +564,7 @@ def calculate_indices(data, labels, load_indices, train_or_val=0):
         print("Calculating Indices...")
         for i in range(len(data)):
             _, label = data[i]
-            if label < labels:
+            if label < no_classes:
                 indices.append(i)
             if i % 50000 == 0:
                 print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
@@ -647,8 +647,8 @@ def main():
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
     else:
-        train_indices = calculate_indices(places_training_data, no_classes, args.load_indices)
-        test_indices = calculate_indices(places_validation_data, no_classes, args.load_indices)
+        train_indices = calculate_indices(places_training_data, no_classes, args.load_indices, train_or_val=0)
+        test_indices = calculate_indices(places_validation_data, no_classes, args.load_indices, train_or_val=1)
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                    sampler=SubsetRandomSampler(train_indices), **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
