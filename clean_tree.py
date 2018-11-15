@@ -248,7 +248,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
             losses.append(torch.nn.CrossEntropyLoss().to(device))
         else:
             weights = [1.0] * (len(leaf_node_labels[j]) + 1)
-            weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels))
+            weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels[j]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
         optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))

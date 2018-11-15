@@ -697,6 +697,7 @@ def main():
     test = args.test
     resume = args.resume
     same = args.same
+    fine_tune = args.fine_tune
 
     no_classes = args.num_classes
 
@@ -816,7 +817,7 @@ def main():
             test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old\n")
-        load = resume or test or same
+        load = resume or test or same or fine_tune
         if no_classes == 365:
             root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
         else:
@@ -826,7 +827,7 @@ def main():
             logging.info("Mobile Tree Net Old")
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
-            if args.fine_tune:
+            if fine_tune:
                 logging.info("fine-tune")
             elif resume:
                 logging.info("resume")
@@ -841,7 +842,7 @@ def main():
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
         if not test:
-            if args.fine_tune:
+            if fine_tune:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
