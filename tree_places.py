@@ -170,7 +170,7 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
 
 def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
-    leaf_node_paths = []    # NOT INCLUDING models[0]
+    leaf_node_paths = []
 
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
@@ -196,7 +196,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
             losses.append(torch.nn.CrossEntropyLoss().to(device))
         else:
             weights = [1.0] * (len(leaf_node_labels[j]) + 1)
-            weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels))
+            weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels[j]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
         optims.append(torch.optim.Adam(model_path, lr=args.lr))
@@ -268,10 +268,13 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
     optims = []
     for j, i in enumerate(leaf_node_index):
         path = []
-        while i >= 0:
+        while i > 0:
             path = [i] + path
             i = (i+1)//2 - 1
-        model_path = list()
+        if (2 ** (max_depth + 1)) > 1 >= (2 ** min_depth):
+            model_path = list(models[0].parameters())
+        else:
+            model_path =list()
         for i in path:
             if (2 ** (max_depth + 1)) > i + 1 >= (2 ** min_depth):
                 model_path += list(models[i].parameters())
@@ -598,8 +601,6 @@ def generate_model_list(root_node, level, device, fcl_factor):
 
         index += 1
         remaining -= 1
-    print(root_node)
-    print(leaf_node_labels)
     for lbls in leaf_node_labels:
         print(len(lbls))
     return models, leaf_node_labels
@@ -744,7 +745,9 @@ def main():
         model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
         if args.log:
             logging.info("Mobile-Net")
-            if resume:
+            if args.fine_tune:
+                logging.info("fine-tune")
+            elif resume:
                 logging.info("resume")
             elif test:
                 logging.info("test")
@@ -823,7 +826,9 @@ def main():
             logging.info("Mobile Tree Net Old")
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
-            if resume:
+            if args.fine_tune:
+                logging.info("fine-tune")
+            elif resume:
                 logging.info("resume")
             elif test:
                 logging.info("test")
