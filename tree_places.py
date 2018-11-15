@@ -245,6 +245,91 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
                        100. * batch_idx / len(train_loader)))
 
 
+def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, min_depth, max_depth):
+    leaf_node_index = []
+    leaf_node_paths = []
+
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+
+    for i in range(len(models)):
+        if not models[i] is None:
+            if (2 ** (max_depth + 1)) > i + 1 >= (2 ** min_depth):    # Models in the specific depth level
+                models[i].train()
+                for param in models[i].parameters():
+                    param.requires_grad = True
+            else:
+                models[i].train()
+                for param in models[i].parameters():
+                    param.requires_grad = False
+            if isinstance(models[i], MobileTreeLeafNet):
+                leaf_node_index.append(i)
+
+    losses = []
+    optims = []
+    for j, i in enumerate(leaf_node_index):
+        path = []
+        while i >= 0:
+            path = [i] + path
+            i = (i+1)//2 - 1
+        model_path = list()
+        for i in path:
+            if (2 ** (max_depth + 1)) > i + 1 >= (2 ** min_depth):
+                model_path += list(models[i].parameters())
+        leaf_node_paths.append(path)
+
+        if args.no_weights:
+            losses.append(torch.nn.CrossEntropyLoss().to(device))
+        else:
+            weights = [1.0] * (len(leaf_node_labels[j]) + 1)
+            weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels))
+            losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
+
+        optims.append(torch.optim.Adam(model_path, lr=args.lr))
+
+    for batch_idx, (data, labels) in enumerate(train_loader):
+        data, labels = data.to(device), labels.to(device)
+
+        for i in range(len(optims)):
+            optims[i].zero_grad()
+
+        losses_to_print = []
+        for i in range(len(leaf_node_paths)):   # for every branch(path) going to a leaf node
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i])):
+                k = leaf_node_paths[i][j]
+                if j+1 == len(leaf_node_paths[i]):
+                    result, _= models[k](layer)
+
+                    lbls = labels.clone()
+                    for l in range(len(lbls)):
+                        if isinstance(leaf_node_labels[i], int):
+                            if lbls[l].item() == leaf_node_labels[i]:
+                                lbls[l] = 0
+                            else:
+                                lbls[l] = 1
+                        else:
+                            if lbls[l].item() in leaf_node_labels[i]:
+                                lbls[l] = leaf_node_labels[i].index(lbls[l])
+                            else:
+                                lbls[l] = len(leaf_node_labels[i])
+
+                    l = losses[i](result, lbls)
+                    l.backward(retain_graph=True)
+                    optims[i].step()
+                    losses_to_print.append(l)
+                else:
+                    layer = models[k](layer)
+
+        if batch_idx % args.log_interval == 0:
+            p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
+            for loss in losses_to_print:
+                p_str += '\tLoss: {:.6f}'.format(loss.item())
+
+            print(p_str.format(
+                epoch, batch_idx * len(data), len(train_loader.sampler),
+                       100. * batch_idx / len(train_loader)))
+
+
 def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
     leaf_node_index = []
     leaf_node_paths = []  # NOT INCLUDING models[0]
@@ -604,6 +689,7 @@ def main():
     parser.add_argument('--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
     parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes')
     parser.add_argument('--load-indices', action='store_true', help='skip the calculation of indices by loading the last calculation')
+    parser.add_argument('--fine-tune', action='store_true', help='log the events')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
@@ -750,17 +836,27 @@ def main():
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
         if not test:
-            if resume:
+            if args.fine_tune:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
-
-            for i in range(len(models)):
-                if not models[i] is None:
-                    torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
+                for epoch in range(1, args.epochs + 1):
+                    train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
+                    test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                for i in range(len(models)):
+                    if not models[i] is None:
+                        torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
+            else:
+                if resume:
+                    for i in range(len(models)):
+                        if not models[i] is None:
+                            models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
+                for epoch in range(1, args.epochs + 1):
+                    train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                for i in range(len(models)):
+                    if not models[i] is None:
+                        torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
 
         if test:
             for i in range(len(models)):
