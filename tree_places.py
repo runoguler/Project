@@ -169,11 +169,9 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
 
 
 def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
-    '''Loss fn and Optims not common, slow version'''
     leaf_node_index = []
     leaf_node_paths = []    # NOT INCLUDING models[0]
 
-    number_of_classes = 10
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     for i in range(len(models)):
@@ -198,7 +196,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
             losses.append(torch.nn.CrossEntropyLoss().to(device))
         else:
             weights = [1.0] * (len(leaf_node_labels[j]) + 1)
-            weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels))
+            weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
         optims.append(torch.optim.Adam(model_path, lr=args.lr))
@@ -304,7 +302,7 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
                 wrong += 1
 
     if args.log:
-        logging.info('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
             (definite_correct + indefinite_correct), len(test_loader.sampler),
             100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
             definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
@@ -357,7 +355,7 @@ def test_net(model, test_loader, device, args):
         logging.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
             test_loss, correct, len(test_loader.sampler),
             100. * correct / len(test_loader.sampler)))
-    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)))
 
@@ -444,7 +442,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
             else:
                 wrong += 1
 
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
+    print('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
@@ -618,7 +616,7 @@ def main():
     if args.log:
         start_time = time.time()
         logging.basicConfig(filename="mainlog.log", level=logging.INFO)
-        logging.info("\n---START---\n")
+        logging.info("---START---\n")
         logging.info(time.asctime(time.localtime(start_time)))
 
     use_cuda = torch.cuda.is_available()
@@ -659,7 +657,7 @@ def main():
     if args.mobile_net:
         model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
         if args.log:
-            logging.info("Mobile-Net\n")
+            logging.info("Mobile-Net")
             if resume:
                 logging.info("resume")
             elif test:
@@ -668,6 +666,7 @@ def main():
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
+            logging.info("Number of Classes: " + str(no_classes))
         if not test:
             if resume:
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -735,7 +734,7 @@ def main():
             root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
         if args.log:
-            logging.info("Mobile Tree Net Old\n")
+            logging.info("Mobile Tree Net Old")
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
             if resume:
@@ -749,6 +748,7 @@ def main():
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
+            logging.info("Number of Classes: " + str(no_classes))
         if not test:
             if resume:
                 for i in range(len(models)):
@@ -824,7 +824,7 @@ def main():
         end_time = time.time()
         logging.info(time.asctime(time.localtime(end_time)))
         logging.info("--- %s seconds ---" % (end_time - start_time))
-        logging.info("\n---END---\n")
+        logging.info("---END---\n")
 
 
 if __name__ == '__main__':
