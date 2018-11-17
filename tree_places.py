@@ -695,7 +695,8 @@ def calculate_no_of_params(models):
     length = 0
     if isinstance(models, list):
         for model in models:
-            length += len(model.parameters())
+            if not model is None:
+                length += len(model.parameters())
     else:
         length = len(models.parameters())
     return length
