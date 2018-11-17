@@ -698,13 +698,14 @@ def load_class_indices(data, no_classes, train_or_val):
 
 
 def calculate_no_of_params(models):
+
     length = 0
     if isinstance(models, list):
         for model in models:
             if not model is None:
-                length += len(model.parameters())
+                length += sum(p.numel() for p in model.parameters())
     else:
-        length = len(models.parameters())
+        length = sum(p.numel() for p in models.parameters())
     return length
 
 
