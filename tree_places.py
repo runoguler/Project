@@ -440,7 +440,7 @@ def test_net(model, test_loader, device, args):
 
     test_loss /= len(test_loader.dataset)
     if args.log:
-        logging.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
             test_loss, correct, len(test_loader.sampler),
             100. * correct / len(test_loader.sampler)))
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
@@ -660,6 +660,47 @@ def calculate_indices(data, no_classes, load_indices, train_or_val):
     return indices
 
 
+def calculate_all_indices(data, train_or_val):
+    indices = [[] for _ in range(365)]
+    print("Calculating All Indices...")
+    for i in range(len(data)):
+        _, label = data[i]
+        indices[label].append(i)
+        if i % 50000 == 0:
+            print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
+    print("Calculation Done")
+    if train_or_val == 0:
+        np.save('all_train_indices.npy', indices)
+    elif train_or_val == 1:
+        np.save('all_val_indices.npy', indices)
+    return indices
+
+
+def load_class_indices(data, no_classes, train_or_val):
+    all_indices = []
+    if train_or_val == 0:
+        if os.path.isfile('all_train_indices.npy'):
+            all_indices = np.load('all_train_indices.npy')
+        else:
+            all_indices = calculate_all_indices(data, train_or_val)
+    elif train_or_val == 1:
+        if os.path.isfile('all_val_indices.npy'):
+            all_indices = np.load('all_val_indices.npy')
+        else:
+            all_indices = calculate_all_indices(data, train_or_val)
+    return all_indices[:no_classes]
+
+
+def calculate_no_of_params(models):
+    length = 0
+    if isinstance(models, list):
+        for model in models:
+            length += len(model.parameters())
+    else:
+        length = len(models.parameters())
+    return length
+
+
 def main():
     batch_size = 64
     test_batch_size = 1000
@@ -690,7 +731,8 @@ def main():
     parser.add_argument('--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
     parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes')
     parser.add_argument('--load-indices', action='store_true', help='skip the calculation of indices by loading the last calculation')
-    parser.add_argument('--fine-tune', action='store_true', help='log the events')
+    parser.add_argument('--fine-tune', action='store_true', help='fine-tune optimization')
+    parser.add_argument('--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
@@ -733,12 +775,12 @@ def main():
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
     else:
-        train_indices = calculate_indices(places_training_data, no_classes, args.load_indices, train_or_val=0)
-        test_indices = calculate_indices(places_validation_data, no_classes, args.load_indices, train_or_val=1)
+        train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
+        val_indices = load_class_indices(places_training_data, no_classes, train_or_val=1)
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                    sampler=SubsetRandomSampler(train_indices), **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
-                                                   sampler=SubsetRandomSampler(test_indices), **cuda_args)
+                                                   sampler=SubsetRandomSampler(val_indices), **cuda_args)
 
     fcl_factor = args.resize // 32
 
@@ -757,6 +799,11 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
+        if args.calc_params:
+            no_params = calculate_no_of_params(model)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -841,6 +888,13 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.calc_params:
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if fine_tune:
                 for i in range(len(models)):
@@ -863,8 +917,7 @@ def main():
                 for i in range(len(models)):
                     if not models[i] is None:
                         torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
-
-        if test:
+        else:
             for i in range(len(models)):
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
