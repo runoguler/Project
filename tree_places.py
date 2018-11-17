@@ -678,19 +678,22 @@ def calculate_all_indices(data, train_or_val):
 
 def load_class_indices(data, no_classes, train_or_val):
     all_indices = []
+    indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
             all_indices = np.load('all_train_indices.npy')
         else:
             all_indices = calculate_all_indices(data, train_or_val)
+        for i in range(no_classes):
+            indices += all_indices[i]
     elif train_or_val == 1:
         if os.path.isfile('all_val_indices.npy'):
             all_indices = np.load('all_val_indices.npy')
+            indices = all_indices[:no_classes].reshape(-1)
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-    indices = []
-    for i in range(no_classes):
-        indices += all_indices[i]
+            for i in range(no_classes):
+                indices += all_indices[i]
     return indices
 
 
