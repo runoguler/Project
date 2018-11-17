@@ -688,7 +688,10 @@ def load_class_indices(data, no_classes, train_or_val):
             all_indices = np.load('all_val_indices.npy')
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-    return all_indices[:no_classes]
+    indices = []
+    for i in range(no_classes):
+        indices += all_indices[i]
+    return indices
 
 
 def calculate_no_of_params(models):
