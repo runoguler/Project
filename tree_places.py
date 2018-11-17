@@ -780,7 +780,7 @@ def main():
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
     else:
         train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
-        val_indices = load_class_indices(places_training_data, no_classes, train_or_val=1)
+        val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                    sampler=SubsetRandomSampler(train_indices), **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
