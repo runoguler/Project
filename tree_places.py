@@ -636,30 +636,6 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
-def calculate_indices(data, no_classes, load_indices, train_or_val):
-    indices = []
-    if load_indices:
-        if train_or_val == 0:
-            indices = np.load('train_indices.npy')
-        elif train_or_val == 1:
-            indices = np.load('val_indices.npy')
-        print("Indices Loaded")
-    else:
-        print("Calculating Indices...")
-        for i in range(len(data)):
-            _, label = data[i]
-            if label < no_classes:
-                indices.append(i)
-            if i % 50000 == 0:
-                print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
-        print("Calculation Done")
-        if train_or_val == 0:
-            np.save('train_indices.npy', indices)
-        elif train_or_val == 1:
-            np.save('val_indices.npy', indices)
-    return indices
-
-
 def calculate_all_indices(data, train_or_val):
     indices = [[] for _ in range(365)]
     print("Calculating All Indices...")
@@ -711,37 +687,36 @@ def calculate_no_of_params(models):
 
 def main():
     batch_size = 64
-    test_batch_size = 1000
-    epochs = 20
-    lr = 0.002
-    depth = 4
+    test_batch_size = 64
+    epochs = 10
+    lr = 0.001
+    depth = 1
     resize = 256
 
-    parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
+    parser = argparse.ArgumentParser(description="Parameters for training Places365 dataset")
     parser.add_argument('--test', action='store_true', help='enables test mode')
     parser.add_argument('--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('--log', action='store_true', help='log the events')
     parser.add_argument('--same', action='store_true', help='use same user preference table to generate the tree')
     parser.add_argument('--no-weights', action='store_true', help='train without class weights')
-    parser.add_argument('--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset')
+    parser.add_argument('--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
-    parser.add_argument('--depth', type=int, default=depth, choices=[1, 2, 3, 4], metavar='lvl', help='depth of the tree')
+    parser.add_argument('--depth', type=int, default=depth, metavar='lvl', help='depth of the tree (default: 1)')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 1000)')
+    parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 64)')
     parser.add_argument('--epochs', type=int, default=epochs, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.01)')
-    parser.add_argument('--num-workers', type=int, default=1, metavar='N', help='number of workers for cuda')
+    parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.001)')
+    parser.add_argument('--num-workers', type=int, default=0, metavar='N', help='number of workers for cuda')
     parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
-    parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes')
-    parser.add_argument('--load-indices', action='store_true', help='skip the calculation of indices by loading the last calculation')
+    parser.add_argument('--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
     parser.add_argument('--fine-tune', action='store_true', help='fine-tune optimization')
     parser.add_argument('--calc-params', action='store_true', help='enable calculating parameters of the model')
-    parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
+    parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
     args = parser.parse_args()
 
     test = args.test
@@ -754,7 +729,7 @@ def main():
     if args.log:
         start_time = time.time()
         logging.basicConfig(filename="mainlog.log", level=logging.INFO)
-        logging.info("---START---\n")
+        logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
 
     use_cuda = torch.cuda.is_available()

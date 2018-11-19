@@ -672,9 +672,9 @@ def find_leaf_node_labels(root_node, level):
 def main():
     batch_size = 64
     test_batch_size = 1000
-    epochs = 20
-    lr = 0.002
-    depth = 4
+    epochs = 10
+    lr = 0.001
+    depth = 1
 
     parser = argparse.ArgumentParser(description="Parameters for Training CIFAR-10")
     parser.add_argument('--test', action='store_true', help='enable test mode')
@@ -694,7 +694,7 @@ def main():
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 1000)')
     parser.add_argument('--epochs', type=int, default=epochs, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.01)')
-    parser.add_argument('--num-workers', type=int, default=1, metavar='N', help='number of workers for cuda')
+    parser.add_argument('--num-workers', type=int, default=0, metavar='N', help='number of workers for cuda')
     parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
