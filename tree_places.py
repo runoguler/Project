@@ -728,7 +728,8 @@ def main():
 
     if args.log:
         start_time = time.time()
-        logging.basicConfig(filename="mainlog.log", level=logging.INFO)
+        logfile = time.strftime("../Log/%d%m%y.log", time.localtime(start_time))
+        logging.basicConfig(filename=logfile, level=logging.INFO)
         logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
 
