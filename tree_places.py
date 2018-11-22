@@ -729,7 +729,7 @@ def main():
 
     if args.log:
         start_time = time.time()
-        logfile = time.strftime("Log/%d%m%y.log", time.localtime(start_time))
+        logfile = time.strftime("Log/%y%m%d.log", time.localtime(start_time))
         logging.basicConfig(filename=logfile, level=logging.INFO)
         logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
@@ -779,11 +779,12 @@ def main():
                 logging.info("resume")
             elif test:
                 logging.info("test")
-            logging.info("Learning Rate: " + str(args.lr))
-            logging.info("Epochs: " + str(args.epochs))
-            logging.info("Batch Size: " + str(args.batch_size))
-            logging.info("Size of Images: " + str(args.resize))
-            logging.info("Number of Classes: " + str(no_classes))
+            else:
+                logging.info("Learning Rate: " + str(args.lr))
+                logging.info("Epochs: " + str(args.epochs))
+                logging.info("Batch Size: " + str(args.batch_size))
+                logging.info("Size of Images: " + str(args.resize))
+                logging.info("Number of Classes: " + str(no_classes))
         if args.calc_params:
             no_params = calculate_no_of_params(model)
             print("Number of Parameters: " + str(no_params))
@@ -857,8 +858,6 @@ def main():
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
         if args.log:
             logging.info("Mobile Tree Net Old")
-            for lbls in leaf_node_labels:
-                logging.info(len(lbls))
             if fine_tune:
                 logging.info("fine-tune")
             elif resume:
@@ -867,14 +866,17 @@ def main():
                 logging.info("test")
             elif same:
                 logging.info("same")
-            logging.info("Learning Rate: " + str(args.lr))
-            logging.info("Depth: " + str(args.depth))
-            logging.info("Epochs: " + str(args.epochs))
-            logging.info("Batch Size: " + str(args.batch_size))
-            logging.info("Size of Images: " + str(args.resize))
-            logging.info("Number of Classes: " + str(no_classes))
-            if args.weight_mult != 1.0:
-                logging.info("Weight factor: " + str(args.weight_mult))
+            else:
+                for lbls in leaf_node_labels:
+                    logging.info(len(lbls))
+                logging.info("Learning Rate: " + str(args.lr))
+                logging.info("Depth: " + str(args.depth))
+                logging.info("Epochs: " + str(args.epochs))
+                logging.info("Batch Size: " + str(args.batch_size))
+                logging.info("Size of Images: " + str(args.resize))
+                logging.info("Number of Classes: " + str(no_classes))
+                if args.weight_mult != 1.0:
+                    logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
             no_params = calculate_no_of_params(models)
             print("Number of Parameters: " + str(no_params))

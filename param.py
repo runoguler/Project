@@ -4,6 +4,8 @@ from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileT
 import utils
 import torch
 
+from torchsummary import summary
+
 def calculate_no_of_params(models, with_names=False):
     length = 0
     if isinstance(models, list):
@@ -102,7 +104,7 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
         remaining -= 1
     return models, leaf_node_labels
 
-size = 256
+size = 64
 no_classes = 365
 depth = 2
 
@@ -136,7 +138,20 @@ if x == 0:
     print('Total:\t' + str(length))
     print()
 
-    print(models)
+    # print(models)
+    # summary(model, input_size=(3, size, size))
+
+    for i, model in enumerate(models):
+        if not model is None:
+            if i == 0:
+                summary(model, input_size=(3, size, size))
+            if i == 1 or i == 2:
+                summary(model, input_size=(64, size, size))
+            if 2 < i < 7:
+                summary(model, input_size=(128, size//4, size//4))
+            if 6 < i < 15:
+                summary(model, input_size=(256, size//8, size//8))
+
 
 
 elif x == 1:
