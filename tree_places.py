@@ -779,12 +779,11 @@ def main():
                 logging.info("resume")
             elif test:
                 logging.info("test")
-            else:
-                logging.info("Learning Rate: " + str(args.lr))
-                logging.info("Epochs: " + str(args.epochs))
-                logging.info("Batch Size: " + str(args.batch_size))
-                logging.info("Size of Images: " + str(args.resize))
-                logging.info("Number of Classes: " + str(no_classes))
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Number of Classes: " + str(no_classes))
         if args.calc_params:
             no_params = calculate_no_of_params(model)
             print("Number of Parameters: " + str(no_params))
@@ -866,17 +865,16 @@ def main():
                 logging.info("test")
             elif same:
                 logging.info("same")
-            else:
-                for lbls in leaf_node_labels:
-                    logging.info(len(lbls))
-                logging.info("Learning Rate: " + str(args.lr))
-                logging.info("Depth: " + str(args.depth))
-                logging.info("Epochs: " + str(args.epochs))
-                logging.info("Batch Size: " + str(args.batch_size))
-                logging.info("Size of Images: " + str(args.resize))
-                logging.info("Number of Classes: " + str(no_classes))
-                if args.weight_mult != 1.0:
-                    logging.info("Weight factor: " + str(args.weight_mult))
+            for lbls in leaf_node_labels:
+                logging.info(len(lbls))
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Depth: " + str(args.depth))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Number of Classes: " + str(no_classes))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
             no_params = calculate_no_of_params(models)
             print("Number of Parameters: " + str(no_params))
