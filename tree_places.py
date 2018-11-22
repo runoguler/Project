@@ -537,15 +537,14 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
     ))
 
 
-def generate_model_list(root_node, level, device, fcl_factor):
+def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
-    root_step = 1
-    step = 3
     models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
     nodes = [(root_node, 0)]
     index = 0
     remaining = 1
+    prev_lvl = 0
     # steps = [3,6,6,9,9,9,9,12,12,12,12,12,12,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
     while remaining > 0:
         if nodes[index] is None:
@@ -561,11 +560,14 @@ def generate_model_list(root_node, level, device, fcl_factor):
         conv_step = (step * (lvl - 1)) + root_step
         in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 1][0]
 
-        for i in range(conv_step, len(cfg_full)):
-            if isinstance(cfg_full[i], int):
-                cfg_full[i] //= 2
-            else:
-                cfg_full[i] = (cfg_full[i][0] // 2, cfg_full[i][1])
+        if prev_lvl < lvl:
+            prev_lvl = lvl
+            for i in range(conv_step, len(cfg_full)-1, 2):
+                if isinstance(cfg_full[i], int):
+                    cfg_full[i] = int(cfg_full[i] // dividing_factor)
+                else:
+                    cfg_full[i] = (int(cfg_full[i][0] // dividing_factor), cfg_full[i][1])
+
 
         # LEFT BRANCH
         left = nodes[index][0].left
@@ -674,7 +676,6 @@ def load_class_indices(data, no_classes, train_or_val):
 
 
 def calculate_no_of_params(models):
-
     length = 0
     if isinstance(models, list):
         for model in models:
@@ -728,7 +729,7 @@ def main():
 
     if args.log:
         start_time = time.time()
-        logfile = time.strftime("../Log/%d%m%y.log", time.localtime(start_time))
+        logfile = time.strftime("Log/%d%m%y.log", time.localtime(start_time))
         logging.basicConfig(filename=logfile, level=logging.INFO)
         logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
