@@ -577,6 +577,7 @@ def main():
     parser.add_argument('--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.01)')
     parser.add_argument('--num-workers', type=int, default=0, metavar='N', help='number of workers for cuda')
     parser.add_argument('--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
+    parser.add_argument('--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status')
     args = parser.parse_args()
 
