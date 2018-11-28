@@ -290,36 +290,28 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        for i in range(len(optims)):
-            optims[i].zero_grad()
-
         losses_to_print = []
         for i in range(len(leaf_node_paths)):   # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j+1 == len(leaf_node_paths[i]):
-                    result, _= models[k](layer)
+            optims[i].zero_grad()
 
-                    lbls = labels.clone()
-                    for l in range(len(lbls)):
-                        if isinstance(leaf_node_labels[i], int):
-                            if lbls[l].item() == leaf_node_labels[i]:
-                                lbls[l] = 0
-                            else:
-                                lbls[l] = 1
-                        else:
-                            if lbls[l].item() in leaf_node_labels[i]:
-                                lbls[l] = leaf_node_labels[i].index(lbls[l])
-                            else:
-                                lbls[l] = len(leaf_node_labels[i])
-
-                    l = losses[i](result, lbls)
-                    l.backward(retain_graph=True)
-                    optims[i].step()
-                    losses_to_print.append(l)
+            lbls = labels.clone()
+            for l in range(len(lbls)):
+                if lbls[l].item() in leaf_node_labels[i]:
+                    lbls[l] = leaf_node_labels[i].index(lbls[l])
                 else:
-                    layer = models[k](layer)
+                    lbls[l] = len(leaf_node_labels[i])
+
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i])-1):
+                k = leaf_node_paths[i][j]
+                layer = models[k](layer)
+            k = leaf_node_index[i]
+            result, _ = models[k](layer)
+
+            l = losses[i](result, lbls)
+            l.backward(retain_graph=True)
+            optims[i].step()
+            losses_to_print.append(l)
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
