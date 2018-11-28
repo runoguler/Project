@@ -102,8 +102,10 @@ def test_tree(models, test_loader, device):
     ))
 
 
-def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args):
+def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
+
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     list_of_model_params = list()
     for i in range(len(models)):
@@ -113,12 +115,21 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
             if isinstance(models[i], MobileTreeLeafNet):
                 leaf_node_index.append(i)
 
-    lossfn = torch.nn.CrossEntropyLoss().to(device)
-    optim = torch.optim.Adam(list_of_model_params, lr=args.lr, betas=(0.5, 0.999))
-    optim.zero_grad()
+    losses = []
+    for ls in leaf_node_labels:
+        if args.no_weights:
+            losses.append(torch.nn.CrossEntropyLoss().to(device))
+        else:
+            weights = [1.0] * (len(ls) + 1)
+            weights[-1] = args.weight_mult / (10 - len(ls))
+            losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
+
+    optim = torch.optim.Adam(list_of_model_params, lr=args.lr)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
+
+        optim.zero_grad()
 
         losses_to_print = []
         leaf_node_results = []
@@ -143,65 +154,7 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
                 else:
                     lbls[l] = len(leaf_node_labels[i])
 
-            l = lossfn(leaf_node_results[i], lbls)
-            sum_of_losses += l
-            losses_to_print.append(l)
-
-        sum_of_losses.backward()
-        optim.step()
-
-        if batch_idx % args.log_interval == 0:
-            p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
-            for loss in losses_to_print:
-                p_str += '\tLoss: {:.6f}'.format(loss.item())
-
-            print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader)))
-
-
-def train_dynamic_tree_beta(models, leaf_node_labels, train_loader, device, epoch, args):
-    leaf_node_index = []
-
-    list_of_model_params = list()
-    for i in range(len(models)):
-        if not models[i] is None:
-            models[i].train()
-            list_of_model_params += models[i].parameters()
-            if isinstance(models[i], MobileTreeLeafNet):
-                leaf_node_index.append(i)
-
-    lossfn = torch.nn.CrossEntropyLoss().to(device)
-    optim = torch.optim.Adam(list_of_model_params, lr=args.lr, betas=(0.5, 0.999))
-    optim.zero_grad()
-
-    for batch_idx, (data, labels) in enumerate(train_loader):
-        data, labels = data.to(device), labels.to(device)
-
-        losses_to_print = []
-        leaf_node_results = []
-        sum_of_losses = 0
-        results = [None] * len(models)
-        results[0] = models[0](data)
-        for i in range(1, len(models)):
-            if not models[i] is None:
-                prev = (i + 1) // 2 - 1
-                if i in leaf_node_index:
-                    res, _ = models[i](results[prev])
-                    results[i] = res
-                    leaf_node_results.append(res)
-                else:
-                    results[i] = models[i](results[prev])
-
-        for i in range(len(leaf_node_results)):
-            lbls = labels.clone()
-            for l in range(len(lbls)):
-                if lbls[l].item() in leaf_node_labels[i]:
-                    lbls[l] = leaf_node_labels[i].index(lbls[l])
-                else:
-                    lbls[l] = len(leaf_node_labels[i])
-
-            l = lossfn(leaf_node_results[i], lbls)
+            l = losses[i](leaf_node_results[i], lbls)
             sum_of_losses += l
             losses_to_print.append(l)
 
@@ -219,11 +172,9 @@ def train_dynamic_tree_beta(models, leaf_node_labels, train_loader, device, epoc
 
 
 def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
-    '''Loss fn and Optims not common, slow version'''
     leaf_node_index = []
-    leaf_node_paths = []    # NOT INCLUDING models[0]
+    leaf_node_paths = []
 
-    number_of_classes = 10
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
 
     for i in range(len(models)):
@@ -248,45 +199,36 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
             losses.append(torch.nn.CrossEntropyLoss().to(device))
         else:
             weights = [1.0] * (len(leaf_node_labels[j]) + 1)
-            weights[-1] = args.weight_mult / (number_of_classes - len(leaf_node_labels[j]))
+            weights[-1] = args.weight_mult / (10 - len(leaf_node_labels[j]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
-        optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
-
+        optims.append(torch.optim.Adam(model_path, lr=args.lr))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
-        for i in range(len(optims)):
+        losses_to_print = []
+        for i in range(len(leaf_node_paths)):
             optims[i].zero_grad()
 
-        losses_to_print = []
-        for i in range(len(leaf_node_paths)):   # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j+1 == len(leaf_node_paths[i]):
-                    result, _= models[k](layer)
-
-                    lbls = labels.clone()
-                    for l in range(len(lbls)):
-                        if isinstance(leaf_node_labels[i], int):
-                            if lbls[l].item() == leaf_node_labels[i]:
-                                lbls[l] = 0
-                            else:
-                                lbls[l] = 1
-                        else:
-                            if lbls[l].item() in leaf_node_labels[i]:
-                                lbls[l] = leaf_node_labels[i].index(lbls[l])
-                            else:
-                                lbls[l] = len(leaf_node_labels[i])
-
-                    l = losses[i](result, lbls)
-                    l.backward(retain_graph=True)
-                    optims[i].step()
-                    losses_to_print.append(l)
+            lbls = labels.clone()
+            for l in range(len(lbls)):
+                if lbls[l].item() in leaf_node_labels[i]:
+                    lbls[l] = leaf_node_labels[i].index(lbls[l])
                 else:
-                    layer = models[k](layer)
+                    lbls[l] = len(leaf_node_labels[i])
+
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i]) - 1):
+                k = leaf_node_paths[i][j]
+                layer = models[k](layer)
+            k = leaf_node_index[i]
+            result, _ = models[k](layer)
+
+            l = losses[i](result, lbls)
+            l.backward(retain_graph=True)
+            optims[i].step()
+            losses_to_print.append(l)
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
@@ -294,77 +236,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
                 p_str += '\tLoss: {:.6f}'.format(loss.item())
 
             print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
-                       100. * batch_idx / len(train_loader)))
-
-
-def train_dynamic_tree_old_loss_common(models, leaf_node_labels, train_loader, device, epoch, args):
-    '''Optims not common, slow version'''
-    leaf_node_index = []
-    leaf_node_paths = []    # NOT INCLUDING models[0]
-
-    for i in range(len(models)):
-        if not models[i] is None:
-            models[i].train()
-            if isinstance(models[i], MobileTreeLeafNet):
-                leaf_node_index.append(i)
-
-    lossfn = torch.nn.CrossEntropyLoss().to(device)
-    optims = []
-    for i in leaf_node_index:
-        path = []
-        while i > 0:
-            path = [i] + path
-            i = (i+1)//2 - 1
-        model_path = list(models[0].parameters())
-        for i in path:
-            model_path += list(models[i].parameters())
-
-        leaf_node_paths.append(path)
-        optims.append(torch.optim.Adam(model_path, lr=args.lr, betas=(0.5, 0.999)))
-
-
-    for batch_idx, (data, labels) in enumerate(train_loader):
-        data, labels = data.to(device), labels.to(device)
-
-        for i in range(len(optims)):
-            optims[i].zero_grad()
-
-        losses_to_print = []
-        for i in range(len(leaf_node_paths)):   # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j+1 == len(leaf_node_paths[i]):
-                    result, _= models[k](layer)
-
-                    lbls = labels.clone()
-                    for l in range(len(lbls)):
-                        if isinstance(leaf_node_labels[i], int):
-                            if lbls[l].item() == leaf_node_labels[i]:
-                                lbls[l] = 0
-                            else:
-                                lbls[l] = 1
-                        else:
-                            if lbls[l].item() in leaf_node_labels[i]:
-                                lbls[l] = leaf_node_labels[i].index(lbls[l])
-                            else:
-                                lbls[l] = len(leaf_node_labels[i])
-
-                    l = lossfn(result, lbls)
-                    l.backward(retain_graph=True)
-                    optims[i].step()
-                    losses_to_print.append(l)
-                else:
-                    layer = models[k](layer)
-
-        if batch_idx % args.log_interval == 0:
-            p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
-            for loss in losses_to_print:
-                p_str += '\tLoss: {:.6f}'.format(loss.item())
-
-            print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
 
@@ -425,15 +297,15 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
                 wrong += 1
 
     if args.log:
-        logging.info('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
-            (definite_correct + indefinite_correct), len(test_loader.dataset),
-            100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
-            definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
+            (definite_correct + indefinite_correct), len(test_loader.sampler),
+            100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+            definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
         ))
     print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
-        (definite_correct + indefinite_correct), len(test_loader.dataset),
-        100. * (definite_correct + indefinite_correct) / len(test_loader.dataset),
-        definite_correct, len(test_loader.dataset), 100. * definite_correct / len(test_loader.dataset)
+        (definite_correct + indefinite_correct), len(test_loader.sampler),
+        100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
     ))
 
 
@@ -669,6 +541,17 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
+def calculate_no_of_params(models):
+    length = 0
+    if isinstance(models, list):
+        for model in models:
+            if not model is None:
+                length += sum(p.numel() for p in model.parameters())
+    else:
+        length = sum(p.numel() for p in models.parameters())
+    return length
+
+
 def main():
     batch_size = 64
     test_batch_size = 1000
@@ -686,9 +569,7 @@ def main():
     parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
-    parser.add_argument('--mobile-tree-net-beta', action='store_true', help='train mobile-tree-net-beta instead of tree-net')
     parser.add_argument('--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
-    parser.add_argument('--mobile-tree-net-old-lc', action='store_true', help='train mobile-tree-net-old-loss-common instead of tree-net')
     parser.add_argument('--depth', type=int, default=depth, choices=[1, 2, 3, 4], metavar='lvl', help='depth of the tree')
     parser.add_argument('--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 1000)')
@@ -705,8 +586,12 @@ def main():
 
     start_time = time.time()
     if args.log:
-        logging.basicConfig(filename="mainlog.log", level=logging.INFO)
+        start_time = time.time()
+        logfile = time.strftime("Logs/%y%m%d.log", time.localtime(start_time))
+        logging.basicConfig(filename=logfile, level=logging.INFO)
+        logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
+        logging.info("CIFAR-10")
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
@@ -730,7 +615,20 @@ def main():
 
     if args.mobile_net:
         model = MobileNet().to(device)
-
+        if args.log:
+            logging.info("Mobile-Net")
+            if resume:
+                logging.info("resume")
+            elif test:
+                logging.info("test")
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+        if args.calc_params:
+            no_params = calculate_no_of_params(model)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -765,66 +663,75 @@ def main():
 
             test_tree(models, test_loader, device)
     elif args.mobile_tree_net:
-        print("Mobile Tree Net\n")
+        print("Mobile Tree Net")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
-
+        if args.log:
+            logging.info("Mobile Tree Net")
+            if resume:
+                logging.info("resume")
+            elif test:
+                logging.info("test")
+            elif same:
+                logging.info("same")
+            for lbls in leaf_node_labels:
+                logging.info(len(lbls))
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Depth: " + str(args.depth))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.calc_params:
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args)
+                train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
                     torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
-
-        if test:
-            for i in range(len(models)):
-                if not models[i] is None:
-                    models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
-    elif args.mobile_tree_net_beta:
-        print("Mobile Tree Net Beta\n")
-        load = resume or test or same
-        root_node = utils.generate(10, 80, load)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
-
-        if not test:
-            if resume:
-                for i in range(len(models)):
-                    if not models[i] is None:
-                        models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree_beta(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
-
-            for i in range(len(models)):
-                if not models[i] is None:
-                    torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
-
-        if test:
+        else:
             for i in range(len(models)):
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
             test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
     elif args.mobile_tree_net_old:
-        print("Mobile Tree Net Old\n")
+        print("Mobile Tree Net Old")
         load = resume or test or same
         root_node = utils.generate(10, 80, load)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
         if args.log:
-            logging.info("Mobile Tree Net Old\n")
-            logging.info(root_node)
-            logging.info(leaf_node_labels)
+            logging.info("Mobile Tree Net Old")
+            if resume:
+                logging.info("resume")
+            elif test:
+                logging.info("test")
+            elif same:
+                logging.info("same")
             for lbls in leaf_node_labels:
                 logging.info(len(lbls))
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Depth: " + str(args.depth))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.calc_params:
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 logging.info("resume")
@@ -833,31 +740,6 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
-
-            for i in range(len(models)):
-                if not models[i] is None:
-                    torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
-
-        if test:
-            for i in range(len(models)):
-                if not models[i] is None:
-                    models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-
-            test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
-    elif args.mobile_tree_net_old_lc:
-        print("Mobile Tree Net Old Lc\n")
-        load = resume or test or same
-        root_node = utils.generate(10, 80, load)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device)
-
-        if not test:
-            if resume:
-                for i in range(len(models)):
-                    if not models[i] is None:
-                        models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree_old_loss_common(models, leaf_node_labels, train_loader, device, epoch, args)
                 test_dynamic_tree(models, leaf_node_labels, test_loader, device, args)
 
             for i in range(len(models)):
@@ -928,6 +810,7 @@ def main():
         end_time = time.time()
         logging.info(time.asctime(time.localtime(end_time)))
         logging.info("--- %s seconds ---" % (end_time - start_time))
+        logging.info("---END---\n")
 
 
 if __name__ == '__main__':
