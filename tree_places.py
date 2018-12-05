@@ -727,7 +727,7 @@ def calculate_all_indices(data, train_or_val):
 
 
 def load_class_indices(data, no_classes, train_or_val, classes=None):
-    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
+    #classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
     indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
@@ -1013,6 +1013,7 @@ def main():
                     if prefs is None:
                         test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                     else:
+                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
@@ -1024,6 +1025,7 @@ def main():
             if prefs is None:
                 test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
             else:
+                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
