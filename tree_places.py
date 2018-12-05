@@ -15,6 +15,8 @@ from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileT
 import utils
 import os
 
+class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
+
 
 def train_tree(models, train_loader, device, epoch, args):
     models[0].train()
@@ -175,16 +177,10 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
 
 
 def map_labels(labels):
-    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
-    to_map = True
-    if to_map:
-        lbls = labels.clone()
-        for i in range(len(lbls)):
-            lbls[i] = classes.index(lbls[i].item())
-        return lbls
-    else:
-        return labels
-
+    lbls = labels.clone()
+    for i in range(len(lbls)):
+        lbls[i] = class_labels.index(lbls[i].item())
+    return lbls
 
 
 def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -222,7 +218,8 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
-        labels = map_labels(labels)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         losses_to_print = []
         for i in range(len(leaf_node_paths)):
@@ -360,7 +357,8 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        labels = map_labels(labels)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         pred = []
         for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
@@ -429,7 +427,8 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        labels = map_labels(labels)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         pred = []
         used_ln_indexes = []
@@ -743,7 +742,6 @@ def calculate_all_indices(data, train_or_val):
 
 
 def load_class_indices(data, no_classes, train_or_val, classes=None):
-    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
     indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
@@ -818,6 +816,7 @@ def main():
     parser.add_argument('-nc', '--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
+    parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     args = parser.parse_args()
 
     test = args.test
@@ -861,8 +860,12 @@ def main():
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
     else:
-        train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
-        val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
+        if args.use_classes:
+            train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0, classes=class_labels)
+            val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1, classes=class_labels)
+        else:
+            train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
+            val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
         train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                    sampler=SubsetRandomSampler(train_indices), **cuda_args)
         val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
