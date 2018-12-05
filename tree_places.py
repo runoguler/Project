@@ -392,6 +392,88 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
     ))
 
 
+def test_tree_personal(models, leaf_node_labels, test_loader, device, args, preferences):
+    leaf_node_index = []
+    leaf_node_paths = []  # NOT INCLUDING models[0]
+
+    for i in range(len(models)):
+        if not models[i] is None:
+            models[i].eval()
+            if isinstance(models[i], MobileTreeLeafNet):
+                leaf_node_index.append(i)
+
+    for i in leaf_node_index:
+        path = []
+        while i > 0:
+            path = [i] + path
+            i = (i + 1) // 2 - 1
+        leaf_node_paths.append(path)
+
+    correct = 0
+    wrong = 0
+
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+
+        pred = []
+        used_ln_indexes = []
+        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
+            if not any(elem in leaf_node_labels[i] for elem in preferences):
+                pred.append(None)
+                continue
+            used_ln_indexes.append(i)
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i])):
+                k = leaf_node_paths[i][j]
+                if j + 1 == len(leaf_node_paths[i]):
+                    result, _ = models[k](layer)
+                    pred.append(result.max(1, keepdim=True)[1])
+                else:
+                    layer = models[k](layer)
+
+        for i in range(labels.size(0)):
+            lbl = labels[i].item()
+            ln_index = -1
+            for j in range(len(leaf_node_labels)):
+                if lbl in leaf_node_labels[j]:
+                    k = leaf_node_labels[j].index(lbl)
+                    ln_index = (j, k)
+                    break
+            if lbl not in preferences:
+                definite = True
+                for j in range(len(leaf_node_index)):
+                    if j in used_ln_indexes:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            definite = False
+                if definite:
+                    correct += 1
+                else:
+                    wrong += 1
+            else:
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(leaf_node_index)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        correct += 1
+                    else:
+                        wrong += 1
+                else:
+                    wrong += 1
+
+    if args.log:
+        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+            correct, len(test_loader.sampler),
+            100. * correct / len(test_loader.sampler)
+        ))
+    print('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+        correct, len(test_loader.sampler),
+        100. * correct / len(test_loader.sampler)
+    ))
+
+
 def train_net(model, train_loader, device, epoch, args):
     model.train()
     loss = torch.nn.CrossEntropyLoss()
@@ -644,24 +726,35 @@ def calculate_all_indices(data, train_or_val):
     return indices
 
 
-def load_class_indices(data, no_classes, train_or_val):
-    all_indices = []
+def load_class_indices(data, no_classes, train_or_val, classes=None):
+    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
     indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
             all_indices = np.load('all_train_indices.npy')
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-        for i in range(no_classes):
-            indices += all_indices[i]
+        if classes is None:
+            for i in range(no_classes):
+                indices += all_indices[i]
+        else:
+            for i in range(len(classes)):
+                indices += all_indices[classes][i]
     elif train_or_val == 1:
         if os.path.isfile('all_val_indices.npy'):
             all_indices = np.load('all_val_indices.npy')
-            indices = all_indices[:no_classes].reshape(-1)
+            if classes is None:
+                indices = all_indices[:no_classes]
+            else:
+                indices = all_indices[classes]
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-            for i in range(no_classes):
-                indices += all_indices[i]
+            if classes is None:
+                for i in range(no_classes):
+                    indices += all_indices[i]
+            else:
+                for i in range(len(classes)):
+                    indices += all_indices[classes][i]
     return indices
 
 
@@ -691,6 +784,7 @@ def main():
     parser.add_argument('--same', action='store_true', help='use same user preference table to generate the tree')
     parser.add_argument('--no-weights', action='store_true', help='train without class weights')
     parser.add_argument('--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
+    parser.add_argument('--prefs', nargs='+', type=int)
     parser.add_argument('--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
@@ -714,6 +808,7 @@ def main():
     resume = args.resume
     same = args.same
     fine_tune = args.fine_tune
+    prefs = args.prefs
 
     no_classes = args.num_classes
 
@@ -901,7 +996,10 @@ def main():
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
-                    test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                    if prefs is None:
+                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                    else:
+                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
                         torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
@@ -912,7 +1010,10 @@ def main():
                             models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
                 for epoch in range(1, args.epochs + 1):
                     train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                    test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                    if prefs is None:
+                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                    else:
+                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
                         torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
@@ -920,11 +1021,14 @@ def main():
             for i in range(len(models)):
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-
-            test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+            if prefs is None:
+                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+            else:
+                test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
-        root_node = utils.generate(10, 80, resume)
+        load = resume or test or same or fine_tune
+        root_node = utils.generate(10, 80, load)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(len(cfg)):
             cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (
@@ -933,9 +1037,6 @@ def main():
         for i in leaf_node_labels:
             branches = 2 if isinstance(i, int) else len(i) + 1
             models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // len(leaf_node_labels))).to(device))
-
-        print(root_node)
-
         if not test:
             if resume:
                 for i in range(len(models)):

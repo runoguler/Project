@@ -99,6 +99,8 @@ def main():
     samples = 1000
 
     preference_table = generate_preference_table(classes, samples, prob=0.5)
+    # preference_table = np.array([[0, 1, 0, 1, 0, 0, 1, 1, 1, 0],
+    #                              [1, 0, 1, 0, 1, 1, 0, 0, 0, 1]]).T
     np.save('preference_table', preference_table)
     print('Preference Table: \n', preference_table)
     print('Correlations: \n', np.corrcoef(preference_table))
