@@ -174,6 +174,19 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
                        100. * batch_idx / len(train_loader)))
 
 
+def map_labels(labels):
+    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
+    to_map = True
+    if to_map:
+        lbls = labels.clone()
+        for i in range(len(lbls)):
+            lbls[i] = classes.index(lbls[i].item())
+        return lbls
+    else:
+        return labels
+
+
+
 def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
     leaf_node_paths = []
@@ -209,6 +222,7 @@ def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
+        labels = map_labels(labels)
 
         losses_to_print = []
         for i in range(len(leaf_node_paths)):
@@ -346,6 +360,7 @@ def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
+        labels = map_labels(labels)
 
         pred = []
         for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
@@ -414,6 +429,7 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
+        labels = map_labels(labels)
 
         pred = []
         used_ln_indexes = []
@@ -468,7 +484,7 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
             correct, len(test_loader.sampler),
             100. * correct / len(test_loader.sampler)
         ))
-    print('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
         correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)
     ))
@@ -727,7 +743,7 @@ def calculate_all_indices(data, train_or_val):
 
 
 def load_class_indices(data, no_classes, train_or_val, classes=None):
-    #classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
+    classes = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
     indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
