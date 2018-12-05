@@ -431,7 +431,7 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
                 else:
                     layer = models[k](layer)
 
-        for i in range(labels.size(0)):
+        for i in range(len(labels)):
             lbl = labels[i].item()
             ln_index = -1
             for j in range(len(leaf_node_labels)):
@@ -439,7 +439,7 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
                     k = leaf_node_labels[j].index(lbl)
                     ln_index = (j, k)
                     break
-            if lbl not in preferences:
+            if ln_index[0] not in used_ln_indexes:
                 definite = True
                 for j in range(len(leaf_node_index)):
                     if j in used_ln_indexes:
@@ -450,10 +450,10 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
                 else:
                     wrong += 1
             else:
-                if pred[ln_index[0]][i] == ln_index[1]:
+                if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in preferences) and pred[ln_index[0]][i] not in preferences):
                     definite = True
                     for j in range(len(leaf_node_index)):
-                        if j != ln_index[0]:
+                        if j in used_ln_indexes and j != ln_index[0]:
                             if pred[j][i] != len(leaf_node_labels[j]):
                                 definite = False
                     if definite:
@@ -739,14 +739,14 @@ def load_class_indices(data, no_classes, train_or_val, classes=None):
                 indices += all_indices[i]
         else:
             for i in range(len(classes)):
-                indices += all_indices[classes][i]
+                indices += all_indices[classes[i]]
     elif train_or_val == 1:
         if os.path.isfile('all_val_indices.npy'):
             all_indices = np.load('all_val_indices.npy')
             if classes is None:
-                indices = all_indices[:no_classes]
+                indices = all_indices[:no_classes].reshape(-1)
             else:
-                indices = all_indices[classes]
+                indices = all_indices[classes].reshape(-1)
         else:
             all_indices = calculate_all_indices(data, train_or_val)
             if classes is None:
@@ -754,7 +754,7 @@ def load_class_indices(data, no_classes, train_or_val, classes=None):
                     indices += all_indices[i]
             else:
                 for i in range(len(classes)):
-                    indices += all_indices[classes][i]
+                    indices += all_indices[classes[i]]
     return indices
 
 
