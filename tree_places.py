@@ -522,6 +522,8 @@ def test_net(model, test_loader, device, args):
     correct = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
         output = model(data)
         test_loss += loss(output, labels).item()
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
