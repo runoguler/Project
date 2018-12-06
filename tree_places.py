@@ -539,14 +539,19 @@ def test_net(model, test_loader, device, args):
         100. * correct / len(test_loader.sampler)))
 
 
-def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args):
+def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     optims = []
-    for model in models:
+    FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+    losses = []
+    for i, model in enumerate(models):
         model.train()
+        if args.no_weights:
+            losses.append(torch.nn.CrossEntropyLoss().to(device))
+        else:
+            weights = [1.0] * (len(leaf_node_labels[i]) + 1)
+            weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels[i]))
+            losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
         optims.append(torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999)))
-
-    lossfn = torch.nn.CrossEntropyLoss()
-    lossfn.to(device)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -565,7 +570,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                 else:
                     lbls[l] = len(leaf_node_labels[i])
 
-            lss = lossfn(output, lbls)
+            lss = losses[i](output, lbls)
             lss_list.append(lss)
             lss.backward()
             optims[i].step()
@@ -1101,7 +1106,7 @@ def main():
                 for i in range(len(models)):
                     models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args)
+                train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
 
             for i in range(len(models)):
