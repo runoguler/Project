@@ -498,6 +498,8 @@ def train_net(model, train_loader, device, epoch, args):
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         optim.zero_grad()
         output = model(data)
