@@ -546,6 +546,8 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         lss_list = []
         for i in range(len(models)):
@@ -574,7 +576,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                        100. * batch_idx / len(train_loader)))
 
 
-def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
+def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args):
     for model in models:
         model.eval()
 
@@ -584,6 +586,8 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
 
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
 
         pred = []
         for i in range(len(models)):
@@ -616,7 +620,12 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device):
                     indefinite_correct += 1
             else:
                 wrong += 1
-
+    if args.log:
+        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
+        (definite_correct + indefinite_correct), len(test_loader.sampler),
+        100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
+        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+        ))
     print('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
@@ -1051,20 +1060,45 @@ def main():
         load = resume or test or same or fine_tune
         root_node = utils.generate(10, 80, load)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
-        for i in range(len(cfg)):
+        for i in range(0, len(cfg), 2):
             cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (
             cfg[i][0] // len(leaf_node_labels), cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = 2 if isinstance(i, int) else len(i) + 1
             models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // len(leaf_node_labels))).to(device))
+        if args.log:
+            logging.info("Parallel Mobile Nets")
+            if fine_tune:
+                logging.info("fine-tune")
+            elif resume:
+                logging.info("resume")
+            elif test:
+                logging.info("test")
+            elif same:
+                logging.info("same")
+            for lbls in leaf_node_labels:
+                logging.info(len(lbls))
+            logging.info("Learning Rate: " + str(args.lr))
+            logging.info("Depth: " + str(args.depth))
+            logging.info("Epochs: " + str(args.epochs))
+            logging.info("Batch Size: " + str(args.batch_size))
+            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Number of Classes: " + str(no_classes))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.calc_params:
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 for i in range(len(models)):
                     models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args)
-                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device)
+                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
 
             for i in range(len(models)):
                 torch.save(models[i].state_dict(), './saved/parallel_mobilenet' + str(i) + '.pth')
