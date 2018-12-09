@@ -1078,10 +1078,16 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
+            if prefs:
+                logging.info("Pref Classes: " + str(prefs))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
         elif args.log:
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
+            if prefs:
+                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
@@ -1134,10 +1140,16 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
+            if prefs:
+                logging.info("Pref Classes: " + str(prefs))
+            if args.weight_mult != 1.0:
+                logging.info("Weight factor: " + str(args.weight_mult))
         elif args.log:
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
+            if prefs:
+                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
