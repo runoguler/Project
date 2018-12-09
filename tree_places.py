@@ -700,7 +700,7 @@ def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, 
     ))
 
 
-def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2):
+def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
     models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
@@ -725,7 +725,7 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
 
         if prev_lvl < lvl:
             prev_lvl = lvl
-            for i in range(conv_step, len(cfg_full)-1, 2):
+            for i in range(conv_step, len(cfg_full) - not_involve, 2):
                 if isinstance(cfg_full[i], int):
                     cfg_full[i] = int(cfg_full[i] // dividing_factor)
                 else:
@@ -767,6 +767,9 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
         remaining -= 1
     for lbls in leaf_node_labels:
         print(len(lbls))
+    print(cfg_full)
+    if log:
+        logging.info(cfg_full)
     return models, leaf_node_labels
 
 
@@ -858,6 +861,51 @@ def calculate_no_of_params(models):
     return length
 
 
+def calculate_no_of_params_in_detail(models, more_detail=False):
+    length = 0
+    if isinstance(models, list):
+        convs, bns, linears = 0, 0, 0
+        for model in models:
+            if not model is None:
+                conv, bn, linear = 0, 0, 0
+                if more_detail:
+                    if isinstance(model, MobileTreeRootNet):
+                        print("Root:")
+                    elif isinstance(model, MobileTreeBranchNet):
+                        print("Branch:")
+                    elif isinstance(model, MobileTreeLeafNet):
+                        print("Leaf:")
+                for name, p in model.named_parameters():
+                    np = p.numel()
+                    if "conv" in name:
+                        conv += np
+                        convs += np
+                    elif "bn" in name:
+                        bn += np
+                        bns += np
+                    else:
+                        linear += np
+                        linears += np
+                length += sum(p.numel() for p in model.parameters())
+                if more_detail:
+                    print('Conv:\t' + str(conv))
+                    print('Bn: \t' + str(bn))
+                    print('Fcl:\t' + str(linear))
+                    print('Total:\t' + str(conv + bn + linear))
+                    print()
+    else:
+        convs, bns, linears = 0, 0, 0
+        for name, p in models.named_parameters():
+            if "conv" in name:
+                convs += p.numel()
+            elif "bn" in name:
+                bns += p.numel()
+            else:
+                linears += p.numel()
+        length = sum(p.numel() for p in models.parameters())
+    return convs, bns, linears, length
+
+
 def main():
     batch_size = 64
     test_batch_size = 64
@@ -892,6 +940,9 @@ def main():
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
+    parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
+    parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
+    parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
     args = parser.parse_args()
 
     test = args.test
@@ -1008,7 +1059,9 @@ def main():
             root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
         else:
             root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
+                                                       root_step=args.root_step, step=args.conv_step,
+                                                       not_involve=args.not_involve, log=args.log)
         if args.log:
             logging.info("Mobile Tree Net")
             if resume:
@@ -1017,8 +1070,7 @@ def main():
                 logging.info("test")
             elif same:
                 logging.info("same")
-            for lbls in leaf_node_labels:
-                logging.info(len(lbls))
+            logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
@@ -1057,7 +1109,9 @@ def main():
             root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
         else:
             root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor)
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
+                                                       root_step=args.root_step, step=args.conv_step,
+                                                       not_involve=args.not_involve, log=args.log)
         if args.log:
             logging.info("Mobile Tree Net Old")
             if fine_tune:
@@ -1068,8 +1122,7 @@ def main():
                 logging.info("test")
             elif same:
                 logging.info("same")
-            for lbls in leaf_node_labels:
-                logging.info(len(lbls))
+            logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
@@ -1142,8 +1195,7 @@ def main():
                 logging.info("test")
             elif same:
                 logging.info("same")
-            for lbls in leaf_node_labels:
-                logging.info(len(lbls))
+            logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
@@ -1153,10 +1205,22 @@ def main():
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            no_params = calculate_no_of_params(models)
-            print("Number of Parameters: " + str(no_params))
-            if args.log:
-                logging.info("Number of Parameters: " + str(no_params))
+            if prefs:
+                pref_models = []
+                for i, model in enumerate(models):
+                    if not model is None:
+                        if any(elem in leaf_node_labels[i] for elem in prefs):
+                            pref_models.append(model)
+                no_params = calculate_no_of_params(pref_models)
+                no_params_all = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+            else:
+                no_params = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 for i in range(len(models)):

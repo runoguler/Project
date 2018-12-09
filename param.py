@@ -6,37 +6,49 @@ import torch
 
 from torchsummary import summary
 
-def calculate_no_of_params(models, with_names=False):
+def calculate_no_of_params(models, in_detail=False):
     length = 0
     if isinstance(models, list):
-        conv, bn, linear = 0, 0, 0
+        convs, bns, linears = 0, 0, 0
         for model in models:
             if not model is None:
-                if with_names:
-                    print(type(model))
+                conv, bn, linear = 0, 0, 0
+                if in_detail:
+                    if isinstance(model, MobileTreeRootNet):
+                        print("Root:")
+                    elif isinstance(model, MobileTreeBranchNet):
+                        print("Branch:")
+                    elif isinstance(model, MobileTreeLeafNet):
+                        print("Leaf:")
                 for name, p in model.named_parameters():
+                    np = p.numel()
                     if "conv" in name:
-                        conv += p.numel()
+                        conv += np
+                        convs += np
                     elif "bn" in name:
-                        bn += p.numel()
+                        bn += np
+                        bns += np
                     else:
-                        linear += p.numel()
-                    if with_names:
-                        print(name + ' - ' + str(p.numel()))
+                        linear += np
+                        linears += np
                 length += sum(p.numel() for p in model.parameters())
+                if in_detail:
+                    print('Conv:\t' + str(conv))
+                    print('Bn: \t' + str(bn))
+                    print('Fcl:\t' + str(linear))
+                    print('Total:\t' + str(conv + bn + linear))
+                    print()
     else:
-        conv, bn, linear = 0, 0, 0
+        convs, bns, linears = 0, 0, 0
         for name, p in models.named_parameters():
             if "conv" in name:
-                conv += p.numel()
+                convs += p.numel()
             elif "bn" in name:
-                bn += p.numel()
+                bns += p.numel()
             else:
-                linear += p.numel()
-            if with_names:
-                print(name + ' - ' + str(p.numel()))
+                linears += p.numel()
         length = sum(p.numel() for p in models.parameters())
-    return conv, bn, linear, length
+    return convs, bns, linears, length
 
 def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2.0):
     leaf_node_labels = []
@@ -102,10 +114,11 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
 
         index += 1
         remaining -= 1
+    print(cfg_full)
     return models, leaf_node_labels
 
 size = 64
-no_classes = 365
+no_classes = 100
 depth = 2
 
 fcl_factor = size // 32
@@ -118,53 +131,39 @@ model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(d
 
 root_node = utils.generate(no_classes, no_classes*5, False)
 models, leaf_node_labels = generate_model_list(root_node, depth, device, fcl_factor,
-                                               root_step=1, step=3, dividing_factor=2)
-
-x = 0
-if x == 0:
-    conv, bn, linear, length = calculate_no_of_params(model)
-    print('MobileNet:')
-    print('Conv:\t' + str(conv))
-    print('Bn: \t' + str(bn))
-    print('Fcl:\t' + str(linear))
-    print('Total:\t' + str(length))
-    print()
-
-    conv, bn, linear, length = calculate_no_of_params(models)
-    print('TreeNet:')
-    print('Conv:\t' + str(conv))
-    print('Bn: \t' + str(bn))
-    print('Fcl:\t' + str(linear))
-    print('Total:\t' + str(length))
-    print()
-
-    # print(models)
-    # summary(model, input_size=(3, size, size))
-
-    for i, model in enumerate(models):
-        if not model is None:
-            if i == 0:
-                summary(model, input_size=(3, size, size))
-            if i == 1 or i == 2:
-                summary(model, input_size=(64, size, size))
-            if 2 < i < 7:
-                summary(model, input_size=(128, size//4, size//4))
-            if 6 < i < 15:
-                summary(model, input_size=(256, size//8, size//8))
+                                               root_step=7, step=5, dividing_factor=2)
 
 
 
-elif x == 1:
-    conv, bn, linear, length = calculate_no_of_params(model)
-    print('MobileNet:')
-    print('Conv:\t' + str(conv))
-    print('Bn: \t' + str(bn))
-    print('Fcl:\t' + str(linear))
-    print('Total:\t' + str(length))
-else:
-    conv, bn, linear, length = calculate_no_of_params(models)
-    print('TreeNet:')
-    print('Conv:\t' + str(conv))
-    print('Bn: \t' + str(bn))
-    print('Fcl:\t' + str(linear))
-    print('Total:\t' + str(length))
+conv, bn, linear, length = calculate_no_of_params(models, in_detail=True)
+print('TreeNet:')
+print('Conv:\t' + str(conv))
+print('Bn: \t' + str(bn))
+print('Fcl:\t' + str(linear))
+print('Total:\t' + str(length))
+print()
+
+# print(models)
+# summary(model, input_size=(3, size, size))
+'''
+for i, model in enumerate(models):
+    if not model is None:
+        if i == 0:
+            summary(model, input_size=(3, size, size))
+        if i == 1 or i == 2:
+            summary(model, input_size=(64, size, size))
+        if 2 < i < 7:
+            summary(model, input_size=(128, size//4, size//4))
+        if 6 < i < 15:
+            summary(model, input_size=(256, size//8, size//8))
+'''
+
+conv, bn, linear, length = calculate_no_of_params(model)
+print('MobileNet:')
+print('Conv:\t' + str(conv))
+print('Bn: \t' + str(bn))
+print('Fcl:\t' + str(linear))
+print('Total:\t' + str(length))
+print()
+
+
