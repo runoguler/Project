@@ -920,6 +920,7 @@ def main():
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
     parser.add_argument('-s', '--same', action='store_true', help='use same user preference table to generate the tree')
     parser.add_argument('-l', '--log', action='store_true', help='log the events')
+    parser.add_argument('-ll', '--limit-log', action='store_true', help='do not log initial logs')
     parser.add_argument('-nw', '--no-weights', action='store_true', help='train without class weights')
     parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
@@ -1061,8 +1062,8 @@ def main():
             root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
                                                        root_step=args.root_step, step=args.conv_step,
-                                                       not_involve=args.not_involve, log=args.log)
-        if args.log:
+                                                       not_involve=args.not_involve, log=(args.log and not args.limit_log))
+        if args.log and not args.limit_log:
             logging.info("Mobile Tree Net")
             if resume:
                 logging.info("resume")
@@ -1077,8 +1078,8 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
-            if args.weight_mult != 1.0:
-                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.weight_mult != 1.0 and args.log:
+            logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
             no_params = calculate_no_of_params(models)
             print("Number of Parameters: " + str(no_params))
@@ -1111,8 +1112,8 @@ def main():
             root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
                                                        root_step=args.root_step, step=args.conv_step,
-                                                       not_involve=args.not_involve, log=args.log)
-        if args.log:
+                                                       not_involve=args.not_involve, log=(args.log and not args.limit_log))
+        if args.log and not args.limit_log:
             logging.info("Mobile Tree Net Old")
             if fine_tune:
                 logging.info("fine-tune")
@@ -1129,8 +1130,8 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(args.resize))
             logging.info("Number of Classes: " + str(no_classes))
-            if args.weight_mult != 1.0:
-                logging.info("Weight factor: " + str(args.weight_mult))
+        if args.weight_mult != 1.0 and args.log:
+            logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
             no_params = calculate_no_of_params(models)
             print("Number of Parameters: " + str(no_params))
