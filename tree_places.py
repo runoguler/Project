@@ -607,21 +607,15 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args)
             lbl = labels[i].item()
             ln_index = -1
             for j in range(len(leaf_node_labels)):
-                if isinstance(leaf_node_labels[j], int):
-                    if lbl == leaf_node_labels[j]:
-                        ln_index = j
-                        break
-                else:
-                    if lbl in leaf_node_labels[j]:
-                        k = leaf_node_labels[j].index(lbl)
-                        ln_index = (j, k)
-                        break
-            if (isinstance(ln_index, int) and pred[ln_index][i] == 0) or pred[ln_index[0]][i] == ln_index[1]:
+                if lbl in leaf_node_labels[j]:
+                    k = leaf_node_labels[j].index(lbl)
+                    ln_index = (j, k)
+                    break
+            if pred[ln_index[0]][i] == ln_index[1]:
                 definite = True
                 for j in range(len(leaf_node_labels)):
-                    if (isinstance(ln_index, int) and j != ln_index) or j != ln_index[0]:
-                        if (isinstance(leaf_node_labels[j], int) and pred[j][i] != 1) or pred[j][i] != len(
-                                leaf_node_labels[j]):
+                    if j != ln_index[0]:
+                        if pred[j][i] != len(leaf_node_labels[j]):
                             definite = False
                 if definite:
                     definite_correct += 1
@@ -639,6 +633,70 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args)
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+    ))
+
+
+def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, preferences):
+    for model in models:
+        model.eval()
+
+    correct = 0
+    wrong = 0
+
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
+
+        pred = []
+        used_ln_index = []
+        for i in range(len(models)):
+            if not any(elem in leaf_node_labels[i] for elem in preferences):
+                pred.append(None)
+            else:
+                used_ln_index.append(i)
+                output = models[i](data)
+                pred.append(output.max(1, keepdim=True)[1])
+
+        for i in range(len(labels)):
+            lbl = labels[i].item()
+            ln_index = -1
+            for j in range(len(leaf_node_labels)):
+                if lbl in leaf_node_labels[j]:
+                    k = leaf_node_labels[j].index(lbl)
+                    ln_index = (j, k)
+                    break
+            if ln_index[0] not in used_ln_index:
+                definite = True
+                for j in range(len(leaf_node_labels)):
+                    if j in used_ln_index:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            definite = False
+                if definite:
+                    correct += 1
+                else:
+                    wrong += 1
+            else:
+                if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in preferences) and pred[ln_index[0]][i] not in preferences):
+                    definite = True
+                    for j in range(len(leaf_node_labels)):
+                        if j in used_ln_index and j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        correct += 1
+                    else:
+                        wrong += 1
+                else:
+                    wrong += 1
+    if args.log:
+        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+        correct, len(test_loader.sampler),
+        100. * correct / len(test_loader.sampler)
+        ))
+    print('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+        correct, len(test_loader.sampler),
+        100. * correct / len(test_loader.sampler)
     ))
 
 
@@ -672,7 +730,6 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
                     cfg_full[i] = int(cfg_full[i] // dividing_factor)
                 else:
                     cfg_full[i] = (int(cfg_full[i][0] // dividing_factor), cfg_full[i][1])
-
 
         # LEFT BRANCH
         left = nodes[index][0].left
@@ -1036,6 +1093,7 @@ def main():
                     if prefs is None:
                         test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                     else:
+                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
@@ -1078,9 +1136,7 @@ def main():
             models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // len(leaf_node_labels))).to(device))
         if args.log:
             logging.info("Parallel Mobile Nets")
-            if fine_tune:
-                logging.info("fine-tune")
-            elif resume:
+            if resume:
                 logging.info("resume")
             elif test:
                 logging.info("test")
@@ -1107,14 +1163,22 @@ def main():
                     models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                if prefs is None:
+                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                else:
+                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                    test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
 
             for i in range(len(models)):
                 torch.save(models[i].state_dict(), './saved/parallel_mobilenet' + str(i) + '.pth')
         else:
             for i in range(len(models)):
                 models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
-            test_parallel_mobilenet(models, leaf_node_labels, val_loader, device)
+            if prefs is None:
+                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+            else:
+                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     else:
         models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
         # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
