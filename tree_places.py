@@ -1199,7 +1199,10 @@ def main():
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         load = resume or test or same or fine_tune
-        root_node = utils.generate(10, 80, load)
+        if no_classes == 365:
+            root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
+        else:
+            root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(0, len(cfg), 2):
             cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (
