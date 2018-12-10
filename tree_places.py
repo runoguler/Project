@@ -1091,10 +1091,22 @@ def main():
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            no_params = calculate_no_of_params(models)
-            print("Number of Parameters: " + str(no_params))
-            if args.log:
-                logging.info("Number of Parameters: " + str(no_params))
+            if prefs:
+                pref_models = []
+                for i, model in enumerate(models):
+                    if not model is None:
+                        if any(elem in leaf_node_labels[i] for elem in prefs):
+                            pref_models.append(model)
+                no_params = calculate_no_of_params(pref_models)
+                no_params_all = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+            else:
+                no_params = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 for i in range(len(models)):
@@ -1153,10 +1165,22 @@ def main():
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            no_params = calculate_no_of_params(models)
-            print("Number of Parameters: " + str(no_params))
-            if args.log:
-                logging.info("Number of Parameters: " + str(no_params))
+            if prefs:
+                pref_models = []
+                for i, model in enumerate(models):
+                    if not model is None:
+                        if any(elem in leaf_node_labels[i] for elem in prefs):
+                            pref_models.append(model)
+                no_params = calculate_no_of_params(pref_models)
+                no_params_all = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
+            else:
+                no_params = calculate_no_of_params(models)
+                print("Number of Parameters: " + str(no_params))
+                if args.log:
+                    logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if fine_tune:
                 for i in range(len(models)):
