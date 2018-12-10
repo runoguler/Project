@@ -1279,22 +1279,9 @@ def main():
         if args.calc_params:
             if prefs:
                 pref_models = []
-                in_ln_index = []
-                j = 0
                 for i, model in enumerate(models):
-                    if isinstance(model, MobileTreeLeafNet):
-                        if any(elem in leaf_node_labels[j] for elem in prefs):
-                            in_ln_index.append(i)
-                        j += 1
-                for i, model in enumerate(models):
-                    if not model is None:
-                        if i == 0:
-                            pref_models.append(model)
-                        for k in in_ln_index:
-                            while k > 0:
-                                if k == i:
-                                    pref_models.append(model)
-                                k = (k + 1) // 2 - 1
+                    if any(elem in leaf_node_labels[i] for elem in prefs):
+                        pref_models.append(model)
                 no_params = calculate_no_of_params(pref_models)
                 no_params_all = calculate_no_of_params(models)
                 print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
