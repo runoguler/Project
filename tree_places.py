@@ -1052,9 +1052,9 @@ def main():
 
     no_classes = args.num_classes
     samples = args.samples
-    if no_classes:
-        if not samples:
-            samples = no_classes * 5
+    if no_classes != 365:
+        if samples == 1000:
+            samples = no_classes * 4
 
     if args.log:
         start_time = time.time()
