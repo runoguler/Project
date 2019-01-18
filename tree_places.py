@@ -1035,7 +1035,7 @@ def main():
     parser.add_argument('-w', '--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('-pp', '--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
     parser.add_argument('-nc', '--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
-    parser.add_argument('-nc', '--samples', type=int, default=1000, metavar='N', help='number of preferences in the preference table')
+    parser.add_argument('-sm', '--samples', type=int, default=1000, metavar='N', help='number of preferences in the preference table')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
