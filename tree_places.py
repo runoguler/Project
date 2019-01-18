@@ -430,8 +430,8 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
-        pred = []
-        used_ln_indexes = []
+        pred = []   # indices are predictions(vector(size of a single batch)) for each leaf (Note that: None for the leaves not used)
+        used_ln_indexes = []    #used paths indexed from left to right in order
         for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
             if not any(elem in leaf_node_labels[i] for elem in preferences):
                 pred.append(None)
@@ -487,6 +487,93 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
         correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)
     ))
+
+
+def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, args, all_prefs):
+    leaf_node_index = []
+    leaf_node_paths = []  # NOT INCLUDING models[0]
+
+    for i in range(len(models)):
+        if not models[i] is None:
+            models[i].eval()
+            if isinstance(models[i], MobileTreeLeafNet):
+                leaf_node_index.append(i)
+
+    for i in leaf_node_index:
+        path = []
+        while i > 0:
+            path = [i] + path
+            i = (i + 1) // 2 - 1
+        leaf_node_paths.append(path)
+
+    corrects = [0] * len(all_prefs)
+
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
+
+        for p, single_pref in enumerate(all_prefs):
+            correct = 0
+            wrong = 0
+            pred = []   # indices are predictions(vector(size of a single batch)) for each leaf (Note that: None for the leaves not used)
+            used_ln_indexes = []    #used paths indexed from left to right in order
+            for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
+                if not any(elem in leaf_node_labels[i] for elem in single_pref):
+                    pred.append(None)
+                    continue
+                used_ln_indexes.append(i)
+                layer = models[0](data)
+                for j in range(len(leaf_node_paths[i])):
+                    k = leaf_node_paths[i][j]
+                    if j + 1 == len(leaf_node_paths[i]):
+                        result, _ = models[k](layer)
+                        pred.append(result.max(1, keepdim=True)[1])
+                    else:
+                        layer = models[k](layer)
+
+            for i in range(len(labels)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if ln_index[0] not in used_ln_indexes:
+                    definite = True
+                    for j in range(len(leaf_node_index)):
+                        if j in used_ln_indexes:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        correct += 1
+                    else:
+                        wrong += 1
+                else:
+                    if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in single_pref) and pred[ln_index[0]][i] not in single_pref):
+                        definite = True
+                        for j in range(len(leaf_node_index)):
+                            if j in used_ln_indexes and j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    definite = False
+                        if definite:
+                            correct += 1
+                        else:
+                            wrong += 1
+                    else:
+                        wrong += 1
+
+            corrects[p] += correct
+
+    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
+    avg_acc = sum(accuracies)/float(len(accuracies))
+
+    if args.log:
+        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+
+    print(accuracies)
+    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
 
 
 def train_net(model, train_loader, device, epoch, args):
@@ -906,6 +993,16 @@ def calculate_no_of_params_in_detail(models, more_detail=False):
     return convs, bns, linears, length
 
 
+def pref_table_to_all_prefs(preference_table):
+    all_prefs = []
+    for i in range(len(preference_table)):
+        all_prefs.append([])
+        for j in range(len(preference_table[i])):
+            if preference_table[i][j] == 1:
+                all_prefs[i].append(j)
+    return all_prefs
+
+
 def main():
     batch_size = 64
     test_batch_size = 64
@@ -1229,6 +1326,9 @@ def main():
                     train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
                         test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                        preference_table = np.load('preference_table.npy')
+                        all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
+                        test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                     else:
                         test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
