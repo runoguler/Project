@@ -1035,6 +1035,7 @@ def main():
     parser.add_argument('-w', '--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
     parser.add_argument('-pp', '--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
     parser.add_argument('-nc', '--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
+    parser.add_argument('-nc', '--samples', type=int, default=1000, metavar='N', help='number of preferences in the preference table')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
@@ -1050,6 +1051,10 @@ def main():
     prefs = args.prefs
 
     no_classes = args.num_classes
+    samples = args.samples
+    if no_classes:
+        if not samples:
+            samples = no_classes * 5
 
     if args.log:
         start_time = time.time()
@@ -1153,10 +1158,7 @@ def main():
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
         load = resume or test or same
-        if no_classes == 365:
-            root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
-        else:
-            root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
+        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
                                                        root_step=args.root_step, step=args.conv_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -1237,10 +1239,7 @@ def main():
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old")
         load = resume or test or same or fine_tune
-        if no_classes == 365:
-            root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
-        else:
-            root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
+        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
                                                        root_step=args.root_step, step=args.conv_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -1347,10 +1346,7 @@ def main():
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         load = resume or test or same or fine_tune
-        if no_classes == 365:
-            root_node = utils.generate(365, 1000, load, prob=args.pref_prob)
-        else:
-            root_node = utils.generate(no_classes, no_classes*5, load, prob=args.pref_prob)
+        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(0, len(cfg), 2):
             cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (
