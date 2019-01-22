@@ -7,9 +7,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 import logging
 import time
 
-from models.tree_net import TreeRootNet, TreeBranchNet
 from models.mobilenet import MobileNet
-from models.mobile_static_tree_net import StaticTreeRootNet, StaticTreeBranchNet
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
 
 import utils
@@ -18,96 +16,14 @@ import os
 class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
 
 
-def train_tree(models, train_loader, device, epoch, args):
-    models[0].train()
-    models[1].train()
-    models[2].train()
-
-    lossfn = torch.nn.CrossEntropyLoss()
-    lossfn.to(device)
-
-    optim = torch.optim.Adam(list(models[0].parameters()) + list(models[1].parameters()) + list(models[2].parameters()), lr=args.lr,
-                                betas=(0.5, 0.999))
-
-    for batch_idx, (data, labels) in enumerate(train_loader):
-        data, labels = data.to(device), labels.to(device)
-
-        optim.zero_grad()
-
-        layer = models[0](data)
-        out_b1, _ = models[1](layer)
-        out_b2, _ = models[2](layer)
-
-        b1_labels = labels.clone()
-        b2_labels = labels.clone() - 5
-
-        b1_labels[b1_labels > 4] = 5
-        b2_labels[b2_labels < 0] = 5
-
-        loss1 = lossfn(out_b1, b1_labels)
-        loss2 = lossfn(out_b2, b2_labels)
-
-        loss = loss1 + loss2
-        loss.backward()
-        optim.step()
-
-        if batch_idx % args.log_interval == 0:
-            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tB1 Loss: {:.6f}\tB2 Loss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(train_loader.sampler),
-                       100. * batch_idx / len(train_loader), loss1.item(), loss2.item()))
+def map_labels(labels):
+    lbls = labels.clone()
+    for i in range(len(lbls)):
+        lbls[i] = class_labels.index(lbls[i].item())
+    return lbls
 
 
-def test_tree(models, test_loader, device):
-    models[0].eval()
-    models[1].eval()
-    models[2].eval()
-
-    corrects, no_class, both_class, false_in_class, correct_from_both, max_correct_from_both = 0, 0, 0, 0, 0, 0
-
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-
-        layer = models[0](data)
-        out_b1, _ = models[1](layer)
-        out_b2, _ = models[2](layer)
-
-        pred_b1 = out_b1.max(1, keepdim=True)[1]
-        pred_b2 = out_b2.max(1, keepdim=True)[1]
-
-        for i in range(labels.size(0)):
-            if pred_b1[i] == 5:
-                if pred_b2[i] == 5:
-                    no_class += 1
-                else:
-                    if labels[i].item() == (pred_b2[i].item() + 5):
-                        corrects += 1
-                    else:
-                        false_in_class += 1
-            else:
-                if pred_b2[i] == 5:
-                    if labels[i].item() == pred_b1[i].item():
-                        corrects += 1
-                    else:
-                        false_in_class += 1
-                else:
-                    both_class += 1
-                    if (labels[i].item() == (pred_b2[i].item() + 5)) or (labels[i].item() == pred_b1[i].item()):
-                        correct_from_both += 1
-                        if (out_b1[i][pred_b1[i].item()].item() > out_b2[i][pred_b2[i].item()].item()) and (
-                                labels[i].item() == pred_b1[i].item()):
-                            max_correct_from_both += 1
-                        elif (out_b2[i][pred_b2[i].item()].item() > out_b1[i][pred_b1[i].item()].item()) and (
-                                labels[i].item() == (pred_b2[i].item() + 5)):
-                            max_correct_from_both += 1
-
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n\t  F_in: {} None: {} Both: ({}/{}/{})\n'.format(
-        corrects, len(test_loader.sampler),
-        100. * corrects / len(test_loader.sampler),
-        false_in_class, no_class, both_class, correct_from_both, max_correct_from_both
-    ))
-
-
-def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
 
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -176,14 +92,7 @@ def train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, ar
                        100. * batch_idx / len(train_loader)))
 
 
-def map_labels(labels):
-    lbls = labels.clone()
-    for i in range(len(lbls)):
-        lbls[i] = class_labels.index(lbls[i].item())
-    return lbls
-
-
-def train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
     leaf_node_paths = []
 
@@ -334,7 +243,7 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
                        100. * batch_idx / len(train_loader)))
 
 
-def test_dynamic_tree(models, leaf_node_labels, test_loader, device, args):
+def test_tree(models, leaf_node_labels, test_loader, device, args):
     leaf_node_index = []
     leaf_node_paths = []  # NOT INCLUDING models[0]
 
@@ -1011,7 +920,8 @@ def main():
     depth = 1
     resize = 256
 
-    parser = argparse.ArgumentParser(description="Parameters for training Places365 dataset")
+    parser = argparse.ArgumentParser(description="Parameters for training Tree-Net")
+    parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
@@ -1023,7 +933,6 @@ def main():
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
     parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
-    parser.add_argument('-ms', '--mobile-static-tree-net', action='store_true', help='train mobile-static-tree-net instead of tree-net')
     parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
     parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
     parser.add_argument('-d', '--depth', type=int, default=depth, metavar='lvl', help='depth of the tree (default: 1)')
@@ -1051,10 +960,12 @@ def main():
     prefs = args.prefs
 
     no_classes = args.num_classes
+    if args.cifar10:
+        no_classes = 10
     samples = args.samples
     if no_classes != 365:
         if samples == 1000:
-            samples = no_classes * 4
+            samples = no_classes * 5
 
     if args.log:
         start_time = time.time()
@@ -1062,45 +973,63 @@ def main():
         logging.basicConfig(filename=logfile, level=logging.INFO)
         logging.info("---START---")
         logging.info(time.asctime(time.localtime(start_time)))
+        if args.cifar10:
+            logging.info("CIFAR-10")
+        else:
+            logging.info("Places-365")
 
     use_cuda = torch.cuda.is_available()
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
-    traindir = os.path.join('../places365/places365_standard', 'train')
-    valdir = os.path.join('../places365/places365_standard', 'val')
-
+    if args.cifar10:
+        mean = (0.4914, 0.4822, 0.4465)
+        sd = (0.2023, 0.1994, 0.2010)
+        resize = 32
+    else:
+        mean = (0.485, 0.456, 0.406)
+        sd = (0.229, 0.224, 0.225)
+        resize = args.resize
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
         transforms.RandomAffine(45, (0.2, 0.2)),
-        transforms.Resize((args.resize ,args.resize)),
+        transforms.Resize((resize ,resize)),
         transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        transforms.Normalize(mean, sd)
     ])
     val_data_transform = transforms.Compose([
-        transforms.Resize((args.resize, args.resize)),
+        transforms.Resize((resize, resize)),
         transforms.ToTensor(),
-        transforms.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        transforms.Normalize(mean, sd)
     ])
-    places_training_data = datasets.ImageFolder(traindir, transform=train_data_transform)
-    places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
-    if no_classes == 365:
-        train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
-        val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
-    else:
-        if args.use_classes:
-            train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0, classes=class_labels)
-            val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1, classes=class_labels)
-        else:
-            train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
-            val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
-        train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
-                                                   sampler=SubsetRandomSampler(train_indices), **cuda_args)
-        val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
-                                                   sampler=SubsetRandomSampler(val_indices), **cuda_args)
 
-    fcl_factor = args.resize // 32
+    if args.cifar10:
+        cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
+        cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=val_data_transform)
+        train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+        val_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    else:
+        traindir = os.path.join('../places365/places365_standard', 'train')
+        valdir = os.path.join('../places365/places365_standard', 'val')
+        places_training_data = datasets.ImageFolder(traindir, transform=train_data_transform)
+        places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
+        if no_classes == 365:
+            train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+            val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+        else:
+            if args.use_classes:
+                train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0, classes=class_labels)
+                val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1, classes=class_labels)
+            else:
+                train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
+                val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
+            train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
+                                                       sampler=SubsetRandomSampler(train_indices), **cuda_args)
+            val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
+                                                       sampler=SubsetRandomSampler(val_indices), **cuda_args)
+
+    fcl_factor = resize // 32
 
     if args.mobile_net:
         model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
@@ -1115,7 +1044,7 @@ def main():
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
-            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Size of Images: " + str(resize))
             logging.info("Number of Classes: " + str(no_classes))
         if args.calc_params:
             no_params = calculate_no_of_params(model)
@@ -1132,32 +1061,9 @@ def main():
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test_net(model, val_loader, device, args)
-    elif args.mobile_static_tree_net:
-        models = [StaticTreeRootNet().to(device), StaticTreeBranchNet().to(device), StaticTreeBranchNet().to(device)]
-        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
-
-        if not test:
-            if resume:
-                models[0].load_state_dict(torch.load('./saved/root.pth'))
-                models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-                models[2].load_state_dict(torch.load('./saved/branch2.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_tree(models, train_loader, device, epoch, args)
-                test_tree(models, val_loader, device)
-
-            torch.save(models[0].state_dict(), './saved/root.pth')
-            torch.save(models[1].state_dict(), './saved/branch1.pth')
-            torch.save(models[2].state_dict(), './saved/branch2.pth')
-
-        if test:
-            models[0].load_state_dict(torch.load('./saved/root.pth'))
-            models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-            models[2].load_state_dict(torch.load('./saved/branch2.pth'))
-
-            test_tree(models, val_loader, device)
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
-        load = resume or test or same
+        load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
                                                        root_step=args.root_step, step=args.conv_step,
@@ -1175,7 +1081,7 @@ def main():
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
-            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Size of Images: " + str(resize))
             logging.info("Number of Classes: " + str(no_classes))
             if prefs:
                 logging.info("Pref Classes: " + str(prefs))
@@ -1224,8 +1130,8 @@ def main():
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             for epoch in range(1, args.epochs + 1):
-                train_dynamic_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                test_tree(models, leaf_node_labels, val_loader, device, args)
 
             for i in range(len(models)):
                 if not models[i] is None:
@@ -1235,7 +1141,7 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
 
-            test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+            test_tree(models, leaf_node_labels, val_loader, device, args)
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old")
         load = resume or test or same or fine_tune
@@ -1258,7 +1164,7 @@ def main():
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
-            logging.info("Size of Images: " + str(args.resize))
+            logging.info("Size of Images: " + str(resize))
             logging.info("Number of Classes: " + str(no_classes))
             if prefs:
                 logging.info("Pref Classes: " + str(prefs))
@@ -1309,9 +1215,9 @@ def main():
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
-                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
                     else:
-                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
@@ -1322,14 +1228,14 @@ def main():
                         if not models[i] is None:
                             models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
                 for epoch in range(1, args.epochs + 1):
-                    train_dynamic_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
-                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
                         preference_table = np.load('preference_table.npy')
                         all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                         test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                     else:
-                        test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
                 for i in range(len(models)):
                     if not models[i] is None:
@@ -1339,12 +1245,12 @@ def main():
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
             if prefs is None:
-                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                test_tree(models, leaf_node_labels, val_loader, device, args)
                 preference_table = np.load('preference_table.npy')
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
             else:
-                test_dynamic_tree(models, leaf_node_labels, val_loader, device, args)
+                test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.parallel_mobile_nets:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
@@ -1413,29 +1319,6 @@ def main():
             else:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
-    else:
-        models = [TreeRootNet().to(device), TreeBranchNet().to(device), TreeBranchNet().to(device)]
-        # LongTensor = torch.cuda.LongTensor if use_cuda else torch.LongTensor
-
-        if not test:
-            if resume:
-                models[0].load_state_dict(torch.load('./saved/root.pth'))
-                models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-                models[2].load_state_dict(torch.load('./saved/branch2.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_tree(models, train_loader, device, epoch, args)
-                test_tree(models, val_loader, device)
-
-            torch.save(models[0].state_dict(), './saved/root.pth')
-            torch.save(models[1].state_dict(), './saved/branch1.pth')
-            torch.save(models[2].state_dict(), './saved/branch2.pth')
-
-        if test:
-            models[0].load_state_dict(torch.load('./saved/root.pth'))
-            models[1].load_state_dict(torch.load('./saved/branch1.pth'))
-            models[2].load_state_dict(torch.load('./saved/branch2.pth'))
-
-            test_tree(models, val_loader, device)
 
     if args.log:
         end_time = time.time()
