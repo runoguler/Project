@@ -1062,6 +1062,9 @@ def main():
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
+    parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
+    parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
+    parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
     args = parser.parse_args()
 
@@ -1167,7 +1170,14 @@ def main():
         if not test:
             if resume:
                 model.load_state_dict(torch.load('./saved/mobilenet.pth'))
+            step = 0
             for epoch in range(1, args.epochs + 1):
+                if args.lr_scheduler:
+                    step += 1
+                    if step == args.lr_step:
+                        step = 0
+                        args.lr *= args.lr_gamma
+                    print(args.lr)
                 train_net(model, train_loader, device, epoch, args)
                 test_net(model, val_loader, device, args)
                 if not no_test:
