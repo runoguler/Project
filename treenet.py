@@ -923,6 +923,7 @@ def main():
     parser = argparse.ArgumentParser(description="Parameters for training Tree-Net")
     parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
+    parser.add_argument('-npt', '--no-test', action='store_true', help='do not test for all preferences while training')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
     parser.add_argument('-s', '--same', action='store_true', help='use same user preference table to generate the tree')
@@ -958,6 +959,7 @@ def main():
     same = args.same
     fine_tune = args.fine_tune
     prefs = args.prefs
+    no_test = args.no_test
 
     no_classes = args.num_classes
     if args.cifar10:
@@ -1231,9 +1233,10 @@ def main():
                     train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
                         test_tree(models, leaf_node_labels, val_loader, device, args)
-                        preference_table = np.load('preference_table.npy')
-                        all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
-                        test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                        if not no_test:
+                            preference_table = np.load('preference_table.npy')
+                            all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
+                            test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                     else:
                         test_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
