@@ -472,7 +472,8 @@ def train_net(model, train_loader, device, epoch, args):
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
 
-    optim = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    # optim = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999))
+    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -1106,6 +1107,7 @@ def main():
         mean = (0.485, 0.456, 0.406)
         sd = (0.229, 0.224, 0.225)
         resize = args.resize
+    '''
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
@@ -1119,6 +1121,18 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean, sd)
     ])
+    '''
+    train_data_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, sd)
+    ])
+    val_data_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean, sd)
+    ])
+
 
     if args.cifar10:
         cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
