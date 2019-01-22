@@ -1004,10 +1004,10 @@ def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
     avg_no_params = sum(no_params) / float(len(no_params))
 
     print(no_params)
-    print("\nAvg # of Params: ", avg_no_params)
+    print("\nAvg # of Params: " + str(avg_no_params))
 
     if log:
-        logging.info("\nAvg # of Params: ", avg_no_params)
+        logging.info("\nAvg # of Params: " + str(avg_no_params))
 
     return avg_no_params
 
