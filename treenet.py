@@ -1083,6 +1083,9 @@ def main():
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test_net(model, val_loader, device, args)
+            preference_table = np.load('preference_table.npy')
+            all_prefs = pref_table_to_all_prefs(preference_table.T)
+            test_net_all_preferences(model, val_loader, device, args, all_prefs)
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
         load = resume or test or same or fine_tune
