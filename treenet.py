@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data.sampler import SubsetRandomSampler
+from torch.optim.lr_scheduler import StepLR, MultiStepLR
 
 import logging
 import time
@@ -970,14 +971,12 @@ def calculate_no_of_params_in_detail(models, more_detail=False):
 
 def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
     params_of_model = [0] * len(models)
-    for i in range(len(params_of_model)):
-        params_of_model[i] = sum(p.numel() for p in models[i].parameters())
-    no_params = [0] * len(all_prefs)
 
     leaf_node_index = []
     leaf_node_paths = []
     for i in range(len(models)):
         if not models[i] is None:
+            params_of_model[i] = sum(p.numel() for p in models[i].parameters())
             models[i].eval()
             if isinstance(models[i], MobileTreeLeafNet):
                 leaf_node_index.append(i)
@@ -988,6 +987,7 @@ def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
             i = (i + 1) // 2 - 1
         leaf_node_paths.append(path)
 
+    no_params = [0] * len(all_prefs)
     for p, single_pref in enumerate(all_prefs):
         models_to_include = [False] * len(models)
         for i in range(len(leaf_node_labels)):
