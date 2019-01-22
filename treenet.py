@@ -712,6 +712,56 @@ def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, 
     ))
 
 
+def test_parallel_all_preferences(models, leaf_node_labels, test_loader, device, args, all_prefs):
+    for model in models:
+        model.eval()
+
+    corrects = [0] * len(all_prefs)
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
+
+        pred = []
+        for i in range(len(models)):
+            output = models[i](data)
+            pred.append(output.max(1, keepdim=True)[1])
+
+        for p, single_pref in enumerate(all_prefs):
+            correct = 0
+            for i in range(len(labels)):
+                lbl = labels[i].item()
+
+                is_correct = True
+                for j, single_leaf_labels in enumerate(leaf_node_labels):
+                    if any(elem in single_leaf_labels for elem in single_pref):
+                        if lbl in single_pref:
+                            if lbl in single_leaf_labels:
+                                if not pred[j][i] == single_leaf_labels.index(lbl):
+                                    is_correct = False
+                            else:
+                                if (not pred[j][i] == len(single_leaf_labels)) and (
+                                        single_leaf_labels[pred[j][i]] in single_pref):
+                                    is_correct = False
+                        else:
+                            if (not pred[j][i] == len(single_leaf_labels)) and (
+                                    single_leaf_labels[pred[j][i]] in single_pref):
+                                is_correct = False
+                if is_correct:
+                    correct += 1
+
+            corrects[p] += correct
+
+    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
+    avg_acc = sum(accuracies) / float(len(accuracies))
+
+    if args.log:
+        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+
+    print(accuracies)
+    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
+
+
 def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
     leaf_node_labels = []
     cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
@@ -918,6 +968,50 @@ def calculate_no_of_params_in_detail(models, more_detail=False):
     return convs, bns, linears, length
 
 
+def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
+    params_of_model = [0] * len(models)
+    for i in range(len(params_of_model)):
+        params_of_model[i] = sum(p.numel() for p in models[i].parameters())
+    no_params = [0] * len(all_prefs)
+
+    leaf_node_index = []
+    leaf_node_paths = []
+    for i in range(len(models)):
+        if not models[i] is None:
+            models[i].eval()
+            if isinstance(models[i], MobileTreeLeafNet):
+                leaf_node_index.append(i)
+    for i in leaf_node_index:
+        path = []
+        while i > 0:
+            path = [i] + path
+            i = (i + 1) // 2 - 1
+        leaf_node_paths.append(path)
+
+    for p, single_pref in enumerate(all_prefs):
+        models_to_include = [False] * len(models)
+        for i in range(len(leaf_node_labels)):
+            if any(elem in leaf_node_labels[i] for elem in single_pref):
+                models_to_include[0] = True
+                for j in leaf_node_paths[i]:
+                    models_to_include[j] = True
+        params = 0
+        for i in range(len(models_to_include)):
+            if models_to_include[i]:
+                params += params_of_model[i]
+        no_params[p] = params
+
+    avg_no_params = sum(no_params) / float(len(no_params))
+
+    print(no_params)
+    print(avg_no_params)
+
+    if log:
+        logging.info(avg_no_params)
+
+    return avg_no_params
+
+
 def pref_table_to_all_prefs(preference_table):
     all_prefs = []
     for i in range(len(preference_table)):
@@ -963,6 +1057,7 @@ def main():
     parser.add_argument('-nc', '--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
     parser.add_argument('-sm', '--samples', type=int, default=1000, metavar='N', help='number of preferences in the preference table')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
+    parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
@@ -1179,6 +1274,8 @@ def main():
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                             test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                            if args.calc_storage:
+                                calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                     else:
                         test_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1194,6 +1291,8 @@ def main():
                 preference_table = np.load('preference_table.npy')
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                if args.calc_storage:
+                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1290,6 +1389,8 @@ def main():
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                             test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                            if args.calc_storage:
+                                calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                     else:
                         test_tree(models, leaf_node_labels, val_loader, device, args)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1305,6 +1406,8 @@ def main():
                 preference_table = np.load('preference_table.npy')
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                if args.calc_storage:
+                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1361,6 +1464,12 @@ def main():
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 if prefs is None:
                     test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                    if not no_test:
+                        preference_table = np.load('preference_table.npy')
+                        all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                        test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                        if args.calc_storage:
+                            calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                 else:
                     test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
                     test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1372,6 +1481,11 @@ def main():
                 models[i].load_state_dict(torch.load('./saved/parallel_mobilenet' + str(i) + '.pth'))
             if prefs is None:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                preference_table = np.load('preference_table.npy')
+                all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                if args.calc_storage:
+                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
