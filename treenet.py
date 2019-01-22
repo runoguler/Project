@@ -422,56 +422,37 @@ def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, arg
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
+        pred = []
+        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
+            layer = models[0](data)
+            for j in range(len(leaf_node_paths[i])):
+                k = leaf_node_paths[i][j]
+                if j + 1 == len(leaf_node_paths[i]):
+                    result, _ = models[k](layer)
+                    pred.append(result.max(1, keepdim=True)[1])
+                else:
+                    layer = models[k](layer)
+
         for p, single_pref in enumerate(all_prefs):
             correct = 0
-            wrong = 0
-            pred = []   # indices are predictions(vector(size of a single batch)) for each leaf (Note that: None for the leaves not used)
-            used_ln_indexes = []    #used paths indexed from left to right in order
-            for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-                if not any(elem in leaf_node_labels[i] for elem in single_pref):
-                    pred.append(None)
-                    continue
-                used_ln_indexes.append(i)
-                layer = models[0](data)
-                for j in range(len(leaf_node_paths[i])):
-                    k = leaf_node_paths[i][j]
-                    if j + 1 == len(leaf_node_paths[i]):
-                        result, _ = models[k](layer)
-                        pred.append(result.max(1, keepdim=True)[1])
-                    else:
-                        layer = models[k](layer)
 
             for i in range(len(labels)):
                 lbl = labels[i].item()
-                ln_index = -1
-                for j in range(len(leaf_node_labels)):
-                    if lbl in leaf_node_labels[j]:
-                        k = leaf_node_labels[j].index(lbl)
-                        ln_index = (j, k)
-                        break
-                if ln_index[0] not in used_ln_indexes:
-                    definite = True
-                    for j in range(len(leaf_node_index)):
-                        if j in used_ln_indexes:
-                            if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
-                    if definite:
-                        correct += 1
-                    else:
-                        wrong += 1
-                else:
-                    if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in single_pref) and pred[ln_index[0]][i] not in single_pref):
-                        definite = True
-                        for j in range(len(leaf_node_index)):
-                            if j in used_ln_indexes and j != ln_index[0]:
-                                if pred[j][i] != len(leaf_node_labels[j]):
-                                    definite = False
-                        if definite:
-                            correct += 1
+                is_correct = True
+                for j, single_leaf_labels in enumerate(leaf_node_labels):
+                    if any(elem in single_leaf_labels for elem in single_pref):
+                        if lbl in single_pref:
+                            if lbl in single_leaf_labels:
+                                if not pred[j][i] == single_leaf_labels.index(lbl):
+                                    is_correct = False
+                            else:
+                                if (not pred[j][i] == len(single_leaf_labels)) and (single_leaf_labels[pred[j][i]] in single_pref):
+                                    is_correct = False
                         else:
-                            wrong += 1
-                    else:
-                        wrong += 1
+                            if (not pred[j][i] == len(single_leaf_labels)) and (single_leaf_labels[pred[j][i]] in single_pref):
+                                is_correct = False
+                if is_correct:
+                    correct += 1
 
             corrects[p] += correct
 
@@ -533,6 +514,41 @@ def test_net(model, test_loader, device, args):
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
         test_loss, correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)))
+
+
+def test_net_all_preferences(model, test_loader, device, args, all_prefs):
+    model.eval()
+
+    corrects = [0] * len(all_prefs)
+    for data, label in test_loader:
+        data, labels = data.to(device), label.to(device)
+        if args.use_classes:
+            labels = map_labels(labels).to(device)
+
+        output = model(data)
+        pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
+
+        for p, single_pref in enumerate(all_prefs):
+            correct = 0
+            for i in range(len(labels)):
+                lbl = labels[i].item()
+                if lbl in single_pref:
+                    if pred[i] == lbl:
+                        correct += 1
+                else:
+                    if pred[i] not in single_pref:
+                        correct += 1
+
+            corrects[p] += correct
+
+    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
+    avg_acc = sum(accuracies) / float(len(accuracies))
+
+    if args.log:
+        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+
+    print(accuracies)
+    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
 
 
 def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -1059,6 +1075,10 @@ def main():
             for epoch in range(1, args.epochs + 1):
                 train_net(model, train_loader, device, epoch, args)
                 test_net(model, val_loader, device, args)
+                if not no_test:
+                    preference_table = np.load('preference_table.npy')
+                    all_prefs = pref_table_to_all_prefs(preference_table.T)
+                    test_net_all_preferences(model, val_loader, device, args, all_prefs)
             torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
@@ -1072,7 +1092,9 @@ def main():
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net")
-            if resume:
+            if fine_tune:
+                logging.info("fine-tune")
+            elif resume:
                 logging.info("resume")
             elif test:
                 logging.info("test")
@@ -1127,23 +1149,51 @@ def main():
                 if args.log:
                     logging.info("Number of Parameters: " + str(no_params))
         if not test:
-            if resume:
+            if fine_tune:
                 for i in range(len(models)):
                     if not models[i] is None:
                         models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-            for epoch in range(1, args.epochs + 1):
-                train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                test_tree(models, leaf_node_labels, val_loader, device, args)
-
-            for i in range(len(models)):
-                if not models[i] is None:
-                    torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
+                for epoch in range(1, args.epochs + 1):
+                    train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
+                    if prefs is None:
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                    else:
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                for i in range(len(models)):
+                    if not models[i] is None:
+                        torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
+            else:
+                if resume:
+                    for i in range(len(models)):
+                        if not models[i] is None:
+                            models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
+                for epoch in range(1, args.epochs + 1):
+                    train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    if prefs is None:
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        if not no_test:
+                            preference_table = np.load('preference_table.npy')
+                            all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
+                            test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                    else:
+                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                for i in range(len(models)):
+                    if not models[i] is None:
+                        torch.save(models[i].state_dict(), './saved/treemodel' + str(i) + '.pth')
         else:
             for i in range(len(models)):
                 if not models[i] is None:
                     models[i].load_state_dict(torch.load('./saved/treemodel' + str(i) + '.pth'))
-
-            test_tree(models, leaf_node_labels, val_loader, device, args)
+            if prefs is None:
+                test_tree(models, leaf_node_labels, val_loader, device, args)
+                preference_table = np.load('preference_table.npy')
+                all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+            else:
+                test_tree(models, leaf_node_labels, val_loader, device, args)
+                test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.mobile_tree_net_old:
         print("Mobile Tree Net Old")
         load = resume or test or same or fine_tune
