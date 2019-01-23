@@ -46,7 +46,10 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
             weights[-1] = args.weight_mult / (args.num_classes - len(ls))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
-    optim = torch.optim.Adam(list_of_model_params, lr=args.lr)
+    if args.adam:
+        optim = torch.optim.Adam(list_of_model_params, lr=args.lr)
+    else:
+        optim = torch.optim.SGD(list_of_model_params, lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -124,7 +127,10 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels[j]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
 
-        optims.append(torch.optim.Adam(model_path, lr=args.lr))
+        if args.adam:
+            optims.append(torch.optim.Adam(model_path, lr=args.lr))
+        else:
+            optims.append(torch.optim.SGD(model_path, lr=args.lr, momentum=0.9, weight_decay=5e-4))
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -472,8 +478,10 @@ def train_net(model, train_loader, device, epoch, args):
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
 
-    # optim = torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999))
-    optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
+    if args.adam:
+        optim = torch.optim.Adam(model.parameters(), lr=args.lr)
+    else:
+        optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -573,6 +581,11 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
             weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels[i]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
         optims.append(torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999)))
+        if args.adam:
+            optims.append(torch.optim.Adam(model.parameters(), lr=args.lr))
+        else:
+            optims.append(torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4))
+
 
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
@@ -1070,10 +1083,11 @@ def main():
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
+    parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
     parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
-    parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
+    parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     args = parser.parse_args()
 
     test = args.test
@@ -1179,6 +1193,10 @@ def main():
             elif test:
                 logging.info("test")
             logging.info("Learning Rate: " + str(args.lr))
+            if args.adam:
+                logging.info("Optimizer: Adam")
+            else:
+                logging.info("Optimizer: SGD")
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(resize))
@@ -1192,7 +1210,7 @@ def main():
             if resume:
                 global best_acc
                 state = torch.load('./saved/mobilenet.pth')
-                model.load_state_dict(state['net'])
+                model.load_state_dict(state['model'])
                 best_acc = state['acc']
             step = 0
             for epoch in range(1, args.epochs + 1):
@@ -1233,6 +1251,10 @@ def main():
                 logging.info("same")
             logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
+            if args.adam:
+                logging.info("Optimizer: Adam")
+            else:
+                logging.info("Optimizer: SGD")
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
@@ -1348,6 +1370,10 @@ def main():
                 logging.info("same")
             logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
+            if args.adam:
+                logging.info("Optimizer: Adam")
+            else:
+                logging.info("Optimizer: SGD")
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
@@ -1466,6 +1492,10 @@ def main():
                 logging.info("same")
             logging.info("Leaf Node Labels:" + str(leaf_node_labels))
             logging.info("Learning Rate: " + str(args.lr))
+            if args.adam:
+                logging.info("Optimizer: Adam")
+            else:
+                logging.info("Optimizer: SGD")
             logging.info("Depth: " + str(args.depth))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
