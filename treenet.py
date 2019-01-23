@@ -15,7 +15,7 @@ import utils
 import os
 
 class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
-
+best_acc = 0
 
 def map_labels(labels):
     lbls = labels.clone()
@@ -493,6 +493,7 @@ def train_net(model, train_loader, device, epoch, args):
 
 
 def test_net(model, test_loader, device, args):
+    global best_acc
     model.eval()
     loss = torch.nn.CrossEntropyLoss(size_average=False)
     loss.to(device)
@@ -509,13 +510,19 @@ def test_net(model, test_loader, device, args):
         correct += pred.eq(labels.view_as(pred)).sum().item()
 
     test_loss /= len(test_loader.dataset)
+    acc = 100. * correct / len(test_loader.sampler)
+    if acc > best_acc:
+        state = {
+            'model': model.state_dict(),
+            'acc': acc
+        }
+        torch.save(state, './saved/mobilenet.pth')
+        best_acc = acc
     if args.log:
         logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
-            test_loss, correct, len(test_loader.sampler),
-            100. * correct / len(test_loader.sampler)))
+            test_loss, correct, len(test_loader.sampler), acc))
     print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
-        test_loss, correct, len(test_loader.sampler),
-        100. * correct / len(test_loader.sampler)))
+        test_loss, correct, len(test_loader.sampler), acc))
 
 
 def test_net_all_preferences(model, test_loader, device, args, all_prefs):
@@ -1183,7 +1190,10 @@ def main():
                 logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
-                model.load_state_dict(torch.load('./saved/mobilenet.pth'))
+                global best_acc
+                state = torch.load('./saved/mobilenet.pth')
+                model.load_state_dict(state['net'])
+                best_acc = state['acc']
             step = 0
             for epoch in range(1, args.epochs + 1):
                 if args.lr_scheduler:
@@ -1198,7 +1208,6 @@ def main():
                     preference_table = np.load('preference_table.npy')
                     all_prefs = pref_table_to_all_prefs(preference_table.T)
                     test_net_all_preferences(model, val_loader, device, args, all_prefs)
-            torch.save(model.state_dict(), './saved/mobilenet.pth')
         else:
             model.load_state_dict(torch.load('./saved/mobilenet.pth'))
             test_net(model, val_loader, device, args)
