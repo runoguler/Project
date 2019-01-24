@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data.sampler import SubsetRandomSampler
-from torch.optim.lr_scheduler import StepLR, MultiStepLR
 
 import logging
 import time
@@ -16,6 +15,8 @@ import os
 
 class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
 best_acc = 0
+vis = utils.Visualizations()
+
 
 def map_labels(labels):
     lbls = labels.clone()
@@ -51,6 +52,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
     else:
         optim = torch.optim.SGD(list_of_model_params, lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
+    avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
@@ -81,19 +83,25 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
 
             l = losses[i](leaf_node_results[i], lbls)
             sum_of_losses += l
-            losses_to_print.append(l)
+            losses_to_print.append(l.item())
 
         sum_of_losses.backward()
         optim.step()
 
+        avg_loss += sum(losses_to_print) / float(len(losses_to_print))
+
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
             for loss in losses_to_print:
-                p_str += '\tLoss: {:.6f}'.format(loss.item())
+                p_str += '\tLoss: {:.6f}'.format(loss)
 
             print(p_str.format(
-                epoch, batch_idx * len(data), len(train_loader.dataset),
+                epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
+
+    if args.visdom:
+        avg_loss /= len(train_loader.sampler)
+        vis.plot_loss(avg_loss, epoch, name='train_loss')
 
 
 def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -132,6 +140,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
         else:
             optims.append(torch.optim.SGD(model_path, lr=args.lr, momentum=0.9, weight_decay=5e-4))
 
+    avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
         if args.use_classes:
@@ -158,16 +167,22 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
             optims[i].step()
-            losses_to_print.append(l)
+            losses_to_print.append(l.item)
+
+        avg_loss += sum(losses_to_print) / float(len(losses_to_print))
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
             for loss in losses_to_print:
-                p_str += '\tLoss: {:.6f}'.format(loss.item())
+                p_str += '\tLoss: {:.6f}'.format(loss)
 
             print(p_str.format(
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
+
+    if args.visdom:
+        avg_loss /= len(train_loader.sampler)
+        vis.plot_loss(avg_loss, epoch, name='train_loss')
 
 
 def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, min_depth, max_depth):
@@ -250,7 +265,7 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
                        100. * batch_idx / len(train_loader)))
 
 
-def test_tree(models, leaf_node_labels, test_loader, device, args):
+def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     global best_acc
     leaf_node_index = []
     leaf_node_paths = []  # NOT INCLUDING models[0]
@@ -312,6 +327,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args):
     acc = 100. * definite_correct / len(test_loader.sampler)
     if acc > best_acc:
         best_acc = acc
+        if args.log: logging.info("Saving state!")
         for i in range(len(models)):
             if not models[i] is None:
                 state = {
@@ -319,6 +335,9 @@ def test_tree(models, leaf_node_labels, test_loader, device, args):
                     'acc': acc
                 }
                 torch.save(state, './saved/treemodel' + str(i) + '.pth')
+
+    if args.visdom and epoch > 0:
+        vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
         logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
@@ -407,11 +426,11 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
                     wrong += 1
 
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
             correct, len(test_loader.sampler),
             100. * correct / len(test_loader.sampler)
         ))
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.2f}%)\n'.format(
         correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)
     ))
@@ -479,10 +498,10 @@ def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, arg
     avg_acc = sum(accuracies)/float(len(accuracies))
 
     if args.log:
-        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
 
     print(accuracies)
-    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
+    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
 def train_net(model, train_loader, device, epoch, args):
@@ -495,6 +514,9 @@ def train_net(model, train_loader, device, epoch, args):
     else:
         optim = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
+    losses = 0
+    correct = 0
+    acc = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
         if args.use_classes:
@@ -506,13 +528,23 @@ def train_net(model, train_loader, device, epoch, args):
         train_loss.backward()
         optim.step()
 
+        pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
+        correct += pred.eq(labels.view_as(pred)).sum().item()
+        losses += train_loss.item()
+        acc = 100. * correct / len(train_loader.sampler)
+
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
+    if args.visdom:
+        losses /= len(train_loader.sampler)
+        vis.plot_loss(losses, epoch, name='train_loss')
+        vis.plot_acc(acc, epoch, name='train_acc')
 
-def test_net(model, test_loader, device, args):
+
+def test_net(model, test_loader, device, args, epoch=0):
     global best_acc
     model.eval()
     loss = torch.nn.CrossEntropyLoss(size_average=False)
@@ -529,15 +561,20 @@ def test_net(model, test_loader, device, args):
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
         correct += pred.eq(labels.view_as(pred)).sum().item()
 
-    test_loss /= len(test_loader.dataset)
+    test_loss /= len(test_loader.sampler)
     acc = 100. * correct / len(test_loader.sampler)
     if acc > best_acc:
+        best_acc = acc
+        if args.log: logging.info("Saving state!")
         state = {
             'model': model.state_dict(),
             'acc': acc
         }
         torch.save(state, './saved/mobilenet.pth')
-        best_acc = acc
+
+    if args.visdom and epoch > 0:
+        vis.plot_loss(test_loss, epoch, name='val_loss')
+        vis.plot_acc(acc, epoch, name='val_acc')
     if args.log:
         logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
             test_loss, correct, len(test_loader.sampler), acc))
@@ -574,10 +611,10 @@ def test_net_all_preferences(model, test_loader, device, args, all_prefs):
     avg_acc = sum(accuracies) / float(len(accuracies))
 
     if args.log:
-        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
 
     print(accuracies)
-    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
+    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
 def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -674,6 +711,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args)
     acc = 100. * definite_correct / len(test_loader.sampler)
     if acc > best_acc:
         best_acc = acc
+        if args.log: logging.info("Saving state!")
         for i in range(len(models)):
             state = {
                 'model': models[i].state_dict(),
@@ -748,11 +786,11 @@ def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, 
                 else:
                     wrong += 1
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
         correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)
         ))
-    print('Test set: Accuracy: {}/{} ({:.0f}%)'.format(
+    print('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
         correct, len(test_loader.sampler),
         100. * correct / len(test_loader.sampler)
     ))
@@ -802,10 +840,10 @@ def test_parallel_all_preferences(models, leaf_node_labels, test_loader, device,
     avg_acc = sum(accuracies) / float(len(accuracies))
 
     if args.log:
-        logging.info('Test set: Accuracy: {:.0f}%'.format(avg_acc))
+        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
 
     print(accuracies)
-    print('\nTest set: Accuracy: {:.0f}%\n'.format(avg_acc))
+    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
 def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
@@ -1052,7 +1090,7 @@ def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
     print("\nAvg # of Params: " + str(avg_no_params))
 
     if log:
-        logging.info("\nAvg # of Params: " + str(avg_no_params))
+        logging.info("Avg # of Params: " + str(avg_no_params))
 
     return avg_no_params
 
@@ -1112,6 +1150,7 @@ def main():
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
+    parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     args = parser.parse_args()
 
     test = args.test
@@ -1245,7 +1284,7 @@ def main():
                         args.lr *= args.lr_gamma
                     print(args.lr)
                 train_net(model, train_loader, device, epoch, args)
-                test_net(model, val_loader, device, args)
+                test_net(model, val_loader, device, args, epoch)
                 if not no_test:
                     preference_table = np.load('preference_table.npy')
                     all_prefs = pref_table_to_all_prefs(preference_table.T)
@@ -1340,9 +1379,9 @@ def main():
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
             else:
                 if resume:
@@ -1355,7 +1394,7 @@ def main():
                 for epoch in range(1, args.epochs + 1):
                     train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         if not no_test:
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
@@ -1363,7 +1402,7 @@ def main():
                             if args.calc_storage:
                                 calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
@@ -1462,9 +1501,9 @@ def main():
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
             else:
                 if resume:
@@ -1477,7 +1516,7 @@ def main():
                 for epoch in range(1, args.epochs + 1):
                     train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         if not no_test:
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
@@ -1485,7 +1524,7 @@ def main():
                             if args.calc_storage:
                                 calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):

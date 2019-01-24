@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.cluster.hierarchy import linkage, dendrogram, cophenet
 from scipy.spatial.distance import pdist
+import visdom
 
 import matplotlib
 matplotlib.use("TkAgg")
@@ -39,6 +40,44 @@ class TreeNode():
 
     def __repr__(self):
         return str(self.value)
+
+
+class Visualizations:
+    def __init__(self, env_name='main'):
+        self.env_name = env_name
+        self.vis = visdom.Visdom(env=self.env_name)
+        self.win_loss = None
+        self.win_acc = None
+
+    def plot_loss(self, data, step, name='init', xlabel='Epoch', ylabel='Loss', new_plot=False):
+        if new_plot:
+            self.win_loss = None
+        self.win_loss = self.vis.line(
+            [data],
+            [step],
+            win=self.win_loss,
+            name=name,
+            update='append' if self.win_loss else None,
+            opts=dict(
+                xlabel=xlabel,
+                ylabel=ylabel
+            )
+        )
+
+    def plot_acc(self, data, step, name='init', xlabel='Epoch', ylabel='Loss', new_plot=False):
+        if new_plot:
+            self.win_acc = None
+        self.win_acc = self.vis.line(
+            [data],
+            [step],
+            win=self.win_acc,
+            name=name,
+            update='append' if self.win_acc else None,
+            opts=dict(
+                xlabel=xlabel,
+                ylabel=ylabel
+            )
+        )
 
 
 def generate_preference_table(classes, samples, prob=0.3):
@@ -80,6 +119,7 @@ def linkage_to_tree(Z, classes):
                 nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth + 1, 0))
     return nodes[-1]
 
+
 def generate(classes, samples, load=False, prob=0.3):
     if load:
         preference_table = np.load('preference_table.npy')
@@ -92,8 +132,12 @@ def generate(classes, samples, load=False, prob=0.3):
 
     return RootNode
 
+
 def main():
     np.set_printoptions(linewidth=320)
+    preference_table = np.load('preference_table.npy')
+    print(preference_table)
+    exit()
 
     classes = 365
     samples = 1000
@@ -121,6 +165,7 @@ def main():
     plt.ylabel('distance')
     dendrogram(Z)
     plt.show()
+
 
 if __name__ == '__main__':
     main()
