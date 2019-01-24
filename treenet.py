@@ -1106,6 +1106,7 @@ def pref_table_to_all_prefs(preference_table):
 
 
 def main():
+    global best_acc
     batch_size = 64
     test_batch_size = 64
     epochs = 10
@@ -1271,7 +1272,6 @@ def main():
                 logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
-                global best_acc
                 state = torch.load('./saved/mobilenet.pth')
                 model.load_state_dict(state['model'])
                 best_acc = state['acc']
@@ -1290,7 +1290,6 @@ def main():
                     all_prefs = pref_table_to_all_prefs(preference_table.T)
                     test_net_all_preferences(model, val_loader, device, args, all_prefs)
         else:
-            global best_acc
             state = torch.load('./saved/mobilenet.pth')
             model.load_state_dict(state['model'])
             best_acc = state['acc']
@@ -1372,7 +1371,6 @@ def main():
             if fine_tune:
                 for i in range(len(models)):
                     if not models[i] is None:
-                        global best_acc
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
@@ -1387,7 +1385,6 @@ def main():
                 if resume:
                     for i in range(len(models)):
                         if not models[i] is None:
-                            global best_acc
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
@@ -1407,7 +1404,6 @@ def main():
         else:
             for i in range(len(models)):
                 if not models[i] is None:
-                    global best_acc
                     state = torch.load('./saved/treemodel' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
@@ -1494,7 +1490,6 @@ def main():
             if fine_tune:
                 for i in range(len(models)):
                     if not models[i] is None:
-                        global best_acc
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
@@ -1509,7 +1504,6 @@ def main():
                 if resume:
                     for i in range(len(models)):
                         if not models[i] is None:
-                            global best_acc
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
@@ -1529,7 +1523,6 @@ def main():
         else:
             for i in range(len(models)):
                 if not models[i] is None:
-                    global best_acc
                     state = torch.load('./saved/treemodel' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
@@ -1595,7 +1588,6 @@ def main():
         if not test:
             if resume:
                 for i in range(len(models)):
-                    global best_acc
                     state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
@@ -1614,7 +1606,6 @@ def main():
                     test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
-                global best_acc
                 state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
                 models[i].load_state_dict(state['model'])
                 best_acc = state['acc']
