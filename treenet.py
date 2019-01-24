@@ -167,7 +167,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
             optims[i].step()
-            losses_to_print.append(l.item)
+            losses_to_print.append(l.item())
 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
