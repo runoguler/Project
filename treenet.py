@@ -88,7 +88,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
         sum_of_losses.backward()
         optim.step()
 
-        avg_loss += sum(losses_to_print) / float(len(losses_to_print))
+        avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
@@ -169,7 +169,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             optims[i].step()
             losses_to_print.append(l.item)
 
-        avg_loss += sum(losses_to_print) / float(len(losses_to_print))
+        avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
