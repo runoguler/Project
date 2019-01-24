@@ -15,7 +15,7 @@ import os
 
 class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
 best_acc = 0
-vis = utils.Visualizations()
+vis = 0
 
 
 def map_labels(labels):
@@ -1153,6 +1153,10 @@ def main():
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     args = parser.parse_args()
+
+    if args.visdom:
+        global vis
+        vis = utils.Visualizations()
 
     test = args.test
     resume = args.resume
