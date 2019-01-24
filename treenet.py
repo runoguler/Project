@@ -327,7 +327,6 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     acc = 100. * definite_correct / len(test_loader.sampler)
     if acc > best_acc:
         best_acc = acc
-        if args.log: logging.info("Saving state!")
         for i in range(len(models)):
             if not models[i] is None:
                 state = {
@@ -565,7 +564,6 @@ def test_net(model, test_loader, device, args, epoch=0):
     acc = 100. * correct / len(test_loader.sampler)
     if acc > best_acc:
         best_acc = acc
-        if args.log: logging.info("Saving state!")
         state = {
             'model': model.state_dict(),
             'acc': acc
@@ -711,7 +709,6 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args)
     acc = 100. * definite_correct / len(test_loader.sampler)
     if acc > best_acc:
         best_acc = acc
-        if args.log: logging.info("Saving state!")
         for i in range(len(models)):
             state = {
                 'model': models[i].state_dict(),
@@ -1197,6 +1194,7 @@ def main():
         sd = (0.229, 0.224, 0.225)
         resize = args.resize
 
+    '''
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
@@ -1221,7 +1219,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean, sd)
     ])
-    '''
+
 
     if args.cifar10:
         cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
