@@ -1194,7 +1194,7 @@ def main():
         sd = (0.229, 0.224, 0.225)
         resize = args.resize
 
-    '''
+
     train_data_transform = transforms.Compose([
         transforms.RandomHorizontalFlip(0.4),
         transforms.RandomRotation(20),
@@ -1219,7 +1219,7 @@ def main():
         transforms.ToTensor(),
         transforms.Normalize(mean, sd)
     ])
-
+    '''
 
     if args.cifar10:
         cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
