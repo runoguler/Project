@@ -325,7 +325,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epoch:
+    if args.val_mode or epoch == args.epochs:
         if acc > best_acc:
             best_acc = acc
             for i in range(len(models)):
@@ -563,7 +563,7 @@ def test_net(model, test_loader, device, args, epoch=0):
 
     test_loss /= len(test_loader.sampler)
     acc = 100. * correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epoch:
+    if args.val_mode or epoch == args.epochs:
         if acc > best_acc:
             best_acc = acc
             state = {
@@ -709,7 +709,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epoch:
+    if args.val_mode or epoch == args.epochs:
         if acc > best_acc:
             best_acc = acc
             for i in range(len(models)):
@@ -1157,7 +1157,7 @@ def main():
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
-    parser.add_argument('-da', '--data-aug', type='int', default=1, choices=[1,2], help='choose the data augmentation')
+    parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1,2], help='choose the data augmentation')
     args = parser.parse_args()
 
     if args.visdom:
@@ -1606,7 +1606,7 @@ def main():
             for epoch in range(1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 if prefs is None:
-                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
                     if not no_test:
                         preference_table = np.load('preference_table.npy')
                         all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
@@ -1614,7 +1614,7 @@ def main():
                         if args.calc_storage:
                             calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
                 else:
-                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
                     test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
