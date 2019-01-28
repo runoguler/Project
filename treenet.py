@@ -325,15 +325,16 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if acc > best_acc:
-        best_acc = acc
-        for i in range(len(models)):
-            if not models[i] is None:
-                state = {
-                    'model': models[i].state_dict(),
-                    'acc': acc
-                }
-                torch.save(state, './saved/treemodel' + str(i) + '.pth')
+    if args.val_mode or epoch == args.epoch:
+        if acc > best_acc:
+            best_acc = acc
+            for i in range(len(models)):
+                if not models[i] is None:
+                    state = {
+                        'model': models[i].state_dict(),
+                        'acc': acc
+                    }
+                    torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_acc(acc, epoch, name='val_acc')
@@ -562,13 +563,14 @@ def test_net(model, test_loader, device, args, epoch=0):
 
     test_loss /= len(test_loader.sampler)
     acc = 100. * correct / len(test_loader.sampler)
-    if acc > best_acc:
-        best_acc = acc
-        state = {
-            'model': model.state_dict(),
-            'acc': acc
-        }
-        torch.save(state, './saved/mobilenet.pth')
+    if args.val_mode or epoch == args.epoch:
+        if acc > best_acc:
+            best_acc = acc
+            state = {
+                'model': model.state_dict(),
+                'acc': acc
+            }
+            torch.save(state, './saved/mobilenet.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_loss(test_loss, epoch, name='val_loss')
@@ -666,7 +668,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                        100. * batch_idx / len(train_loader)))
 
 
-def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args):
+def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args, epoch=0):
     global best_acc
     for model in models:
         model.eval()
@@ -707,14 +709,18 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args)
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if acc > best_acc:
-        best_acc = acc
-        for i in range(len(models)):
-            state = {
-                'model': models[i].state_dict(),
-                'acc': acc
-            }
-            torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
+    if args.val_mode or epoch == args.epoch:
+        if acc > best_acc:
+            best_acc = acc
+            for i in range(len(models)):
+                state = {
+                    'model': models[i].state_dict(),
+                    'acc': acc
+                }
+                torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
+
+    if args.visdom and epoch > 0:
+        vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
         logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
@@ -1144,11 +1150,14 @@ def main():
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
+    parser.add_argument('-dfp', '--df-parallel', type=int, default=-1, help='dividing factor in parallel nets')
     parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
+    parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
+    parser.add_argument('-da', '--data-aug', action='int', default=1, choices=[1,2], help='choose the data augmentation')
     args = parser.parse_args()
 
     if args.visdom:
@@ -1194,32 +1203,31 @@ def main():
         sd = (0.229, 0.224, 0.225)
         resize = args.resize
 
-
-    train_data_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(0.4),
-        transforms.RandomRotation(20),
-        transforms.RandomAffine(45, (0.2, 0.2)),
-        transforms.Resize((resize ,resize)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean, sd)
-    ])
-    val_data_transform = transforms.Compose([
-        transforms.Resize((resize, resize)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean, sd)
-    ])
-    '''
-    train_data_transform = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(mean, sd)
-    ])
-    val_data_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean, sd)
-    ])
-    '''
+    if args.data_aug == 1:
+        train_data_transform = transforms.Compose([
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
+        val_data_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
+    else:
+        train_data_transform = transforms.Compose([
+            transforms.RandomHorizontalFlip(0.4),
+            transforms.RandomRotation(20),
+            transforms.RandomAffine(45, (0.2, 0.2)),
+            transforms.Resize((resize ,resize)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
+        val_data_transform = transforms.Compose([
+            transforms.Resize((resize, resize)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
 
     if args.cifar10:
         cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
@@ -1543,13 +1551,15 @@ def main():
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
+        dividing_factor = len(leaf_node_labels) if args.df_parallel == -1 else args.df_parallel
+        fcl_dividing_factor = len(leaf_node_labels)
         for i in range(0, len(cfg), 2):
-            cfg[i] = cfg[i] // len(leaf_node_labels) if isinstance(cfg[i], int) else (
-            cfg[i][0] // len(leaf_node_labels), cfg[i][1])
+            cfg[i] = cfg[i] // dividing_factor if isinstance(cfg[i], int) else (
+            cfg[i][0] // dividing_factor, cfg[i][1])
         models = []
         for i in leaf_node_labels:
-            branches = 2 if isinstance(i, int) else len(i) + 1
-            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // len(leaf_node_labels))).to(device))
+            branches = len(i) + 1
+            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // fcl_dividing_factor)).to(device))
         if args.log:
             logging.info("Parallel Mobile Nets")
             if resume:
