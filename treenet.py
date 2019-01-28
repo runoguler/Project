@@ -1433,7 +1433,7 @@ def main():
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                             test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                             if args.calc_storage:
-                                calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                                calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
                     else:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1449,7 +1449,7 @@ def main():
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                 if args.calc_storage:
-                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1552,7 +1552,7 @@ def main():
                             all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                             test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                             if args.calc_storage:
-                                calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                                calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
                     else:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1568,7 +1568,7 @@ def main():
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                 if args.calc_storage:
-                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1637,7 +1637,7 @@ def main():
                         all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                         test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                         if args.calc_storage:
-                            calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                            calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
                 else:
                     test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
                     test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1652,7 +1652,7 @@ def main():
                 all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                 test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
                 if args.calc_storage:
-                    calculate_params_all_preferences(models, all_prefs, leaf_node_labels, args.log)
+                    calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
