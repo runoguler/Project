@@ -325,16 +325,15 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epochs:
-        if acc > best_acc:
-            best_acc = acc
-            for i in range(len(models)):
-                if not models[i] is None:
-                    state = {
-                        'model': models[i].state_dict(),
-                        'acc': acc
-                    }
-                    torch.save(state, './saved/treemodel' + str(i) + '.pth')
+    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+        best_acc = acc
+        for i in range(len(models)):
+            if not models[i] is None:
+                state = {
+                    'model': models[i].state_dict(),
+                    'acc': acc
+                }
+                torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_acc(acc, epoch, name='val_acc')
@@ -563,14 +562,13 @@ def test_net(model, test_loader, device, args, epoch=0):
 
     test_loss /= len(test_loader.sampler)
     acc = 100. * correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epochs:
-        if acc > best_acc:
-            best_acc = acc
-            state = {
-                'model': model.state_dict(),
-                'acc': acc
-            }
-            torch.save(state, './saved/mobilenet.pth')
+    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+        best_acc = acc
+        state = {
+            'model': model.state_dict(),
+            'acc': acc
+        }
+        torch.save(state, './saved/mobilenet.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_loss(test_loss, epoch, name='val_loss')
@@ -709,15 +707,14 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if args.val_mode or epoch == args.epochs:
-        if acc > best_acc:
-            best_acc = acc
-            for i in range(len(models)):
-                state = {
-                    'model': models[i].state_dict(),
-                    'acc': acc
-                }
-                torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
+    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+        best_acc = acc
+        for i in range(len(models)):
+            state = {
+                'model': models[i].state_dict(),
+                'acc': acc
+            }
+            torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_acc(acc, epoch, name='val_acc')
@@ -1100,6 +1097,10 @@ def calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, l
 
 def calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, log):
     params_of_model = [0] * len(models)
+
+    for i in range(len(models)):
+        if not models[i] is None:
+            params_of_model[i] = sum(p.numel() for p in models[i].parameters())
 
     no_params = [0] * len(all_prefs)
     for p, single_pref in enumerate(all_prefs):
