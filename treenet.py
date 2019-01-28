@@ -1055,7 +1055,7 @@ def calculate_no_of_params_in_detail(models, more_detail=False):
     return convs, bns, linears, length
 
 
-def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
+def calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, log):
     params_of_model = [0] * len(models)
 
     leaf_node_index = []
@@ -1081,6 +1081,32 @@ def calculate_params_all_preferences(models, all_prefs, leaf_node_labels, log):
                 models_to_include[0] = True
                 for j in leaf_node_paths[i]:
                     models_to_include[j] = True
+        params = 0
+        for i in range(len(models_to_include)):
+            if models_to_include[i]:
+                params += params_of_model[i]
+        no_params[p] = params
+
+    avg_no_params = sum(no_params) / float(len(no_params))
+
+    print(no_params)
+    print("\nAvg # of Params: " + str(avg_no_params))
+
+    if log:
+        logging.info("Avg # of Params: " + str(avg_no_params))
+
+    return avg_no_params
+
+
+def calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, log):
+    params_of_model = [0] * len(models)
+
+    no_params = [0] * len(all_prefs)
+    for p, single_pref in enumerate(all_prefs):
+        models_to_include = [False] * len(models)
+        for i in range(len(leaf_node_labels)):
+            if any(elem in leaf_node_labels[i] for elem in single_pref):
+                models_to_include[i] = True
         params = 0
         for i in range(len(models_to_include)):
             if models_to_include[i]:
@@ -1552,14 +1578,13 @@ def main():
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         dividing_factor = len(leaf_node_labels) if args.df_parallel == -1 else args.df_parallel
-        fcl_dividing_factor = len(leaf_node_labels)
         for i in range(0, len(cfg), 2):
             cfg[i] = cfg[i] // dividing_factor if isinstance(cfg[i], int) else (
             cfg[i][0] // dividing_factor, cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = len(i) + 1
-            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // fcl_dividing_factor)).to(device))
+            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // dividing_factor)).to(device))
         if args.log:
             logging.info("Parallel Mobile Nets")
             if resume:
