@@ -1157,7 +1157,7 @@ def main():
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
-    parser.add_argument('-da', '--data-aug', action='int', default=1, choices=[1,2], help='choose the data augmentation')
+    parser.add_argument('-da', '--data-aug', type='int', default=1, choices=[1,2], help='choose the data augmentation')
     args = parser.parse_args()
 
     if args.visdom:
