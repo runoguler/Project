@@ -52,12 +52,14 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
     else:
         optim = torch.optim.SGD(list_of_model_params, lr=args.lr, momentum=0.9, weight_decay=5e-4)
 
+    definite_correct = 0
     avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
 
         optim.zero_grad()
 
+        pred = []
         losses_to_print = []
         leaf_node_results = []
         sum_of_losses = 0
@@ -70,6 +72,8 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                     res, _ = models[i](results[prev])
                     results[i] = res
                     leaf_node_results.append(res)
+                    if args.visdom and epoch > 0:
+                        pred.append(res.max(1, keepdim=True)[1])
                 else:
                     results[i] = models[i](results[prev])
 
@@ -90,6 +94,24 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
+        if args.visdom and epoch > 0:
+            for i in range(labels.size(0)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(leaf_node_index)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        definite_correct += 1
+
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
             for loss in losses_to_print:
@@ -99,9 +121,11 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
-    if args.visdom:
+    if args.visdom and epoch > 0:
         avg_loss /= len(train_loader.sampler)
+        acc = 100. * definite_correct / len(train_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='train_loss')
+        vis.plot_acc(acc, epoch, name='train_acc')
 
 
 def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -140,12 +164,14 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
         else:
             optims.append(torch.optim.SGD(model_path, lr=args.lr, momentum=0.9, weight_decay=5e-4))
 
+    definite_correct = 0
     avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
+        pred = []
         losses_to_print = []
         for i in range(len(leaf_node_paths)):
             optims[i].zero_grad()
@@ -163,6 +189,8 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 layer = models[k](layer)
             k = leaf_node_index[i]
             result, _ = models[k](layer)
+            if args.visdom and epoch > 0:
+                pred.append(result.max(1, keepdim=True)[1])
 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
@@ -170,6 +198,24 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             losses_to_print.append(l.item())
 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
+
+        if args.visdom and epoch > 0:
+            for i in range(labels.size(0)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(leaf_node_index)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        definite_correct += 1
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
@@ -180,9 +226,11 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
-    if args.visdom:
+    if args.visdom and epoch > 0:
         avg_loss /= len(train_loader.sampler)
+        acc = 100. * definite_correct / len(train_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='train_loss')
+        vis.plot_acc(acc, epoch, name='train_acc')
 
 
 def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, min_depth, max_depth):
@@ -286,22 +334,53 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     definite_correct = 0
     indefinite_correct = 0
     wrong = 0
-
+    avg_loss = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
         pred = []
-        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j + 1 == len(leaf_node_paths[i]):
-                    result, _ = models[k](layer)
-                    pred.append(result.max(1, keepdim=True)[1])
+        losses_to_print = []
+        leaf_node_results = []
+        sum_of_losses = 0
+        results = [None] * len(models)
+        results[0] = models[0](data)
+        for i in range(1, len(models)):
+            if not models[i] is None:
+                prev = (i + 1) // 2 - 1
+                if i in leaf_node_index:
+                    res, _ = models[i](results[prev])
+                    results[i] = res
+                    pred.append(res.max(1, keepdim=True)[1])
+                    if args.visdom and epoch > 0:
+                        leaf_node_results.append(res)
                 else:
-                    layer = models[k](layer)
+                    results[i] = models[i](results[prev])
+
+        if args.visdom and epoch > 0:
+            use_cuda = torch.cuda.is_available()
+            FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+            losses = []
+            for ls in leaf_node_labels:
+                if args.no_weights:
+                    losses.append(torch.nn.CrossEntropyLoss().to(device))
+                else:
+                    weights = [1.0] * (len(ls) + 1)
+                    weights[-1] = args.weight_mult / (args.num_classes - len(ls))
+                    losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
+            for i in range(len(leaf_node_results)):
+                lbls = labels.clone()
+                for l in range(len(lbls)):
+                    if lbls[l].item() in leaf_node_labels[i]:
+                        lbls[l] = leaf_node_labels[i].index(lbls[l])
+                    else:
+                        lbls[l] = len(leaf_node_labels[i])
+
+                l = losses[i](leaf_node_results[i], lbls)
+                sum_of_losses += l
+                losses_to_print.append(l.item())
+            avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
         for i in range(labels.size(0)):
             lbl = labels[i].item()
@@ -336,6 +415,8 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
+        avg_loss /= len(test_loader.sampler)
+        vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
@@ -537,7 +618,7 @@ def train_net(model, train_loader, device, epoch, args):
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
-    if args.visdom:
+    if args.visdom and epoch > 0:
         losses /= len(train_loader.sampler)
         vis.plot_loss(losses, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -632,16 +713,20 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         else:
             optims.append(torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4))
 
-
+    definite_correct = 0
+    avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
         lss_list = []
+        pred = []
         for i in range(len(models)):
             optims[i].zero_grad()
             output = models[i](data)
+            if args.visdom and epoch > 0:
+                pred.append(output.max(1, keepdim=True)[1])
 
             lbls = labels.clone()
             for l in range(len(lbls)):
@@ -651,18 +736,45 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                     lbls[l] = len(leaf_node_labels[i])
 
             lss = losses[i](output, lbls)
-            lss_list.append(lss)
+            lss_list.append(lss.item())
             lss.backward()
             optims[i].step()
+
+        avg_loss += (sum(lss_list) / float(len(lss_list)))
+
+        if args.visdom and epoch > 0:
+            for i in range(labels.size(0)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(models)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        definite_correct += 1
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
             for loss in lss_list:
-                p_str += '\tLoss: {:.6f}'.format(loss.item())
+                p_str += '\tLoss: {:.6f}'.format(loss)
 
             print(p_str.format(
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
+
+    if args.visdom and epoch > 0:
+        avg_loss /= len(train_loader.sampler)
+        acc = 100. * definite_correct / len(train_loader.sampler)
+        vis.plot_loss(avg_loss, epoch, name='train_loss')
+        vis.plot_acc(acc, epoch, name='train_acc')
+
 
 
 def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args, epoch=0):
@@ -673,16 +785,45 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
     definite_correct = 0
     indefinite_correct = 0
     wrong = 0
-
+    avg_loss = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
         if args.use_classes:
             labels = map_labels(labels).to(device)
 
         pred = []
+        losses_to_print = []
+        sum_of_losses = 0
+        leaf_node_results = []
         for i in range(len(models)):
             output = models[i](data)
             pred.append(output.max(1, keepdim=True)[1])
+            if args.visdom and epoch > 0:
+                leaf_node_results.append(output)
+
+        if args.visdom and epoch > 0:
+            use_cuda = torch.cuda.is_available()
+            FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
+            losses = []
+            for ls in leaf_node_labels:
+                if args.no_weights:
+                    losses.append(torch.nn.CrossEntropyLoss().to(device))
+                else:
+                    weights = [1.0] * (len(ls) + 1)
+                    weights[-1] = args.weight_mult / (args.num_classes - len(ls))
+                    losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
+            for i in range(len(leaf_node_results)):
+                lbls = labels.clone()
+                for l in range(len(lbls)):
+                    if lbls[l].item() in leaf_node_labels[i]:
+                        lbls[l] = leaf_node_labels[i].index(lbls[l])
+                    else:
+                        lbls[l] = len(leaf_node_labels[i])
+
+                l = losses[i](leaf_node_results[i], lbls)
+                sum_of_losses += l
+                losses_to_print.append(l.item())
+            avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
         for i in range(len(labels)):
             lbl = labels[i].item()
@@ -716,6 +857,8 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
             torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
+        avg_loss /= len(test_loader.sampler)
+        vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
@@ -1134,8 +1277,7 @@ def pref_table_to_all_prefs(preference_table):
     return all_prefs
 
 
-def main():
-    global best_acc
+def getArgs():
     batch_size = 64
     test_batch_size = 64
     epochs = 10
@@ -1183,8 +1325,14 @@ def main():
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
-    parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1,2], help='choose the data augmentation')
+    parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2], help='choose the data augmentation')
     args = parser.parse_args()
+    return args
+
+
+def main():
+    global best_acc
+    args = getArgs()
 
     if args.visdom:
         global vis
