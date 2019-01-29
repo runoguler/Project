@@ -1427,9 +1427,9 @@ def main():
         ])
     else:
         train_data_transform = transforms.Compose([
-            transforms.RandomHorizontalFlip(0.4),
-            transforms.RandomRotation(20),
-            transforms.RandomAffine(45, (0.2, 0.2)),
+            transforms.RandomHorizontalFlip(),
+            #transforms.RandomRotation(20),
+            transforms.RandomAffine(15, (0.2, 0.2)),
             transforms.Resize((resize ,resize)),
             transforms.ToTensor(),
             transforms.Normalize(mean, sd)
