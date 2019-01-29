@@ -627,7 +627,6 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
             weights = [1.0] * (len(leaf_node_labels[i]) + 1)
             weights[-1] = args.weight_mult / (args.num_classes - len(leaf_node_labels[i]))
             losses.append(torch.nn.CrossEntropyLoss(weight=FloatTensor(weights)).to(device))
-        optims.append(torch.optim.Adam(model.parameters(), lr=args.lr, betas=(0.5, 0.999)))
         if args.adam:
             optims.append(torch.optim.Adam(model.parameters(), lr=args.lr))
         else:
