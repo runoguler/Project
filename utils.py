@@ -49,7 +49,7 @@ class Visualizations:
         self.win_loss = None
         self.win_acc = None
 
-    def plot_loss(self, data, step, name='init', xlabel='Epoch', ylabel='Loss', new_plot=False):
+    def plot_loss(self, data, step, name='init', xlabel='Epochs', ylabel='Loss', new_plot=False):
         if new_plot:
             self.win_loss = None
         self.win_loss = self.vis.line(
@@ -64,7 +64,7 @@ class Visualizations:
             )
         )
 
-    def plot_acc(self, data, step, name='init', xlabel='Epoch', ylabel='Loss', new_plot=False):
+    def plot_acc(self, data, step, name='init', xlabel='Epochs', ylabel='Accuracy', new_plot=False):
         if new_plot:
             self.win_acc = None
         self.win_acc = self.vis.line(

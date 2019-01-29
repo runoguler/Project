@@ -404,13 +404,14 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
         for i in range(len(models)):
             if not models[i] is None:
                 state = {
                     'model': models[i].state_dict(),
-                    'acc': acc
+                    'acc': acc,
+                    'vis': vis
                 }
                 torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
@@ -643,11 +644,12 @@ def test_net(model, test_loader, device, args, epoch=0):
 
     test_loss /= len(test_loader.sampler)
     acc = 100. * correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
         state = {
             'model': model.state_dict(),
-            'acc': acc
+            'acc': acc,
+            'vis': vis
         }
         torch.save(state, './saved/mobilenet.pth')
 
@@ -847,12 +849,13 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or epoch == args.epochs:
+    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
         for i in range(len(models)):
             state = {
                 'model': models[i].state_dict(),
-                'acc': acc
+                'acc': acc,
+                'vis': vis
             }
             torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
 
@@ -1459,6 +1462,8 @@ def main():
                 state = torch.load('./saved/mobilenet.pth')
                 model.load_state_dict(state['model'])
                 best_acc = state['acc']
+                if state['vis'] != 0:
+                    vis = state['vis']
             step = 0
             for epoch in range(1, args.epochs + 1):
                 if args.lr_scheduler:
@@ -1558,6 +1563,8 @@ def main():
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
+                        if state['vis'] != 0:
+                            vis = state['vis']
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
@@ -1572,6 +1579,8 @@ def main():
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
+                            if state['vis'] != 0:
+                                vis = state['vis']
                 for epoch in range(1, args.epochs + 1):
                     train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
@@ -1677,6 +1686,8 @@ def main():
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
+                        if state['vis'] != 0:
+                            vis = state['vis']
                 for epoch in range(1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
@@ -1691,6 +1702,8 @@ def main():
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
+                            if state['vis'] != 0:
+                                vis = state['vis']
                 for epoch in range(1, args.epochs + 1):
                     train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
@@ -1776,6 +1789,8 @@ def main():
                     state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
+                    if state['vis'] != 0:
+                        vis = state['vis']
             for epoch in range(1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 if prefs is None:
