@@ -408,11 +408,22 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         best_acc = acc
         for i in range(len(models)):
             if not models[i] is None:
-                state = {
-                    'model': models[i].state_dict(),
-                    'acc': acc,
-                    'vis': vis
-                }
+                if args.visdom:
+                    state = {
+                        'model': models[i].state_dict(),
+                        'acc': acc,
+                        'epoch': epoch,
+                        'vis': True,
+                        'vis-win-loss': vis.win_loss,
+                        'vis-win-acc': vis.win_acc
+                    }
+                else:
+                    state = {
+                        'model': models[i].state_dict(),
+                        'acc': acc,
+                        'epoch': epoch,
+                        'vis': False
+                    }
                 torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
@@ -421,12 +432,12 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
             (definite_correct + indefinite_correct), len(test_loader.sampler),
             100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
             definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
         ))
-    print('\nTest set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)\n'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
@@ -646,20 +657,31 @@ def test_net(model, test_loader, device, args, epoch=0):
     acc = 100. * correct / len(test_loader.sampler)
     if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
-        state = {
-            'model': model.state_dict(),
-            'acc': acc,
-            'vis': vis
-        }
+        if args.visdom:
+            state = {
+                'model': model.state_dict(),
+                'acc': acc,
+                'epoch': epoch,
+                'vis': True,
+                'vis-win-loss': vis.win_loss,
+                'vis-win-acc': vis.win_acc
+            }
+        else:
+            state = {
+                'model': model.state_dict(),
+                'acc': acc,
+                'epoch': epoch,
+                'vis': False
+            }
         torch.save(state, './saved/mobilenet.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_loss(test_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
     if args.log:
-        logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+        logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             test_loss, correct, len(test_loader.sampler), acc))
-    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)'.format(
+    print('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
         test_loss, correct, len(test_loader.sampler), acc))
 
 
@@ -778,7 +800,6 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         vis.plot_acc(acc, epoch, name='train_acc')
 
 
-
 def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args, epoch=0):
     global best_acc
     for model in models:
@@ -852,11 +873,22 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
     if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
         for i in range(len(models)):
-            state = {
-                'model': models[i].state_dict(),
-                'acc': acc,
-                'vis': vis
-            }
+            if args.visdom:
+                state = {
+                    'model': models[i].state_dict(),
+                    'acc': acc,
+                    'epoch': epoch,
+                    'vis': True,
+                    'vis-win-loss': vis.win_loss,
+                    'vis-win-acc': vis.win_acc
+                }
+            else:
+                state = {
+                    'model': models[i].state_dict(),
+                    'acc': acc,
+                    'epoch': epoch,
+                    'vis': False
+                }
             torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
 
     if args.visdom and epoch > 0:
@@ -865,12 +897,12 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
         ))
-    print('Test set: Accuracy: {}/{} ({:.0f}%)\tDefinite Corrects: {}/{} ({:.0f}%)'.format(
+    print('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
@@ -1348,6 +1380,8 @@ def main():
     prefs = args.prefs
     no_test = args.no_test
 
+    last_epoch = 0
+
     no_classes = args.num_classes
     if args.cifar10:
         no_classes = 10
@@ -1462,10 +1496,12 @@ def main():
                 state = torch.load('./saved/mobilenet.pth')
                 model.load_state_dict(state['model'])
                 best_acc = state['acc']
-                if state['vis'] != 0:
-                    vis = state['vis']
-            step = 0
-            for epoch in range(1, args.epochs + 1):
+                last_epoch = state['epoch']
+                if state['vis']:
+                    vis.win_acc = state['vis-win-acc']
+                    vis.win_loss = state['vis-win-loss']
+            args.epochs += last_epoch
+            for epoch in range(last_epoch + 1, args.epochs + 1):
                 if args.lr_scheduler:
                     step += 1
                     if step == args.lr_step:
@@ -1563,9 +1599,12 @@ def main():
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
-                        if state['vis'] != 0:
-                            vis = state['vis']
-                for epoch in range(1, args.epochs + 1):
+                        last_epoch = state['epoch']
+                        if state['vis']:
+                            vis.win_acc = state['vis-win-acc']
+                            vis.win_loss = state['vis-win-loss']
+                args.epochs += last_epoch
+                for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
@@ -1579,9 +1618,12 @@ def main():
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
-                            if state['vis'] != 0:
-                                vis = state['vis']
-                for epoch in range(1, args.epochs + 1):
+                            last_epoch = state['epoch']
+                            if state['vis']:
+                                vis.win_acc = state['vis-win-acc']
+                                vis.win_loss = state['vis-win-loss']
+                args.epochs += last_epoch
+                for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
@@ -1686,9 +1728,12 @@ def main():
                         state = torch.load('./saved/treemodel' + str(i) + '.pth')
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
-                        if state['vis'] != 0:
-                            vis = state['vis']
-                for epoch in range(1, args.epochs + 1):
+                        last_epoch = state['epoch']
+                        if state['vis']:
+                            vis.win_acc = state['vis-win-acc']
+                            vis.win_loss = state['vis-win-loss']
+                args.epochs += last_epoch
+                for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
                     if prefs is None:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
@@ -1702,9 +1747,12 @@ def main():
                             state = torch.load('./saved/treemodel' + str(i) + '.pth')
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
-                            if state['vis'] != 0:
-                                vis = state['vis']
-                for epoch in range(1, args.epochs + 1):
+                            last_epoch = state['epoch']
+                            if state['vis']:
+                                vis.win_acc = state['vis-win-acc']
+                                vis.win_loss = state['vis-win-loss']
+                args.epochs += last_epoch
+                for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
                         test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
@@ -1789,9 +1837,12 @@ def main():
                     state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
-                    if state['vis'] != 0:
-                        vis = state['vis']
-            for epoch in range(1, args.epochs + 1):
+                    last_epoch = state['epoch']
+                    if state['vis']:
+                        vis.win_acc = state['vis-win-acc']
+                        vis.win_loss = state['vis-win-loss']
+            args.epochs += last_epoch
+            for epoch in range(last_epoch + 1, args.epochs + 1):
                 train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 if prefs is None:
                     test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
