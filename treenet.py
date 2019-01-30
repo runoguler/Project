@@ -1353,7 +1353,7 @@ def getArgs():
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
-    parser.add_argument('-dfp', '--df-parallel', type=int, default=-1, help='dividing factor in parallel nets')
+    parser.add_argument('-df', '--div-factor', type=int, default=-1, help='dividing factor in networks')
     parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
@@ -1527,8 +1527,9 @@ def main():
         print("Mobile Tree Net")
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
+        dividing_factor = 2 if args.div_factor == -1 else args.div_factor
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
-                                                       root_step=args.root_step, step=args.conv_step,
+                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net")
@@ -1656,8 +1657,9 @@ def main():
         print("Mobile Tree Net Old")
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
+        dividing_factor = 2 if args.div_factor == -1 else args.div_factor
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
-                                                       root_step=args.root_step, step=args.conv_step,
+                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net Old")
@@ -1786,7 +1788,7 @@ def main():
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
-        dividing_factor = len(leaf_node_labels) if args.df_parallel == -1 else args.df_parallel
+        dividing_factor = len(leaf_node_labels) if args.div_factor == -1 else args.div_factor
         for i in range(0, len(cfg), 2):
             cfg[i] = cfg[i] // dividing_factor if isinstance(cfg[i], int) else (
             cfg[i][0] // dividing_factor, cfg[i][1])
