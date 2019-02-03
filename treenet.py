@@ -121,8 +121,13 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
-    avg_loss /= len(train_loader.sampler)
     acc = 100. * definite_correct / len(train_loader.sampler)
+    if args.just_train and epoch == args.epochs:
+        for i in range(len(models)):
+            if not models[i] is None:
+                saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
+
+    avg_loss /= len(train_loader.sampler)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -231,8 +236,13 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
-    avg_loss /= len(train_loader.sampler)
     acc = 100. * definite_correct / len(train_loader.sampler)
+    if args.just_train and epoch == args.epochs:
+        for i in range(len(models)):
+            if not models[i] is None:
+                saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
+
+    avg_loss /= len(train_loader.sampler)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -419,23 +429,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         best_acc = acc
         for i in range(len(models)):
             if not models[i] is None:
-                if args.visdom:
-                    state = {
-                        'model': models[i].state_dict(),
-                        'acc': acc,
-                        'epoch': epoch,
-                        'vis': True,
-                        'vis-win-loss': vis.win_loss,
-                        'vis-win-acc': vis.win_acc
-                    }
-                else:
-                    state = {
-                        'model': models[i].state_dict(),
-                        'acc': acc,
-                        'epoch': epoch,
-                        'vis': False
-                    }
-                torch.save(state, './saved/treemodel' + str(i) + '.pth')
+                saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
 
     avg_loss /= len(test_loader.sampler)
     if args.visdom and epoch > 0:
@@ -642,6 +636,10 @@ def train_net(model, train_loader, device, epoch, args):
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
     losses /= len(train_loader.sampler)
+
+    if args.just_train and epoch == args.epochs:
+        saveModel(model, acc, epoch, './saved/mobilenet.pth')
+
     if args.visdom and epoch > 0:
         vis.plot_loss(losses, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -673,23 +671,7 @@ def test_net(model, test_loader, device, args, epoch=0):
     acc = 100. * correct / len(test_loader.sampler)
     if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
-        if args.visdom:
-            state = {
-                'model': model.state_dict(),
-                'acc': acc,
-                'epoch': epoch,
-                'vis': True,
-                'vis-win-loss': vis.win_loss,
-                'vis-win-acc': vis.win_acc
-            }
-        else:
-            state = {
-                'model': model.state_dict(),
-                'acc': acc,
-                'epoch': epoch,
-                'vis': False
-            }
-        torch.save(state, './saved/mobilenet.pth')
+        saveModel(model, acc, epoch, './saved/mobilenet.pth')
 
     if args.visdom and epoch > 0:
         vis.plot_loss(test_loss, epoch, name='val_loss')
@@ -809,8 +791,12 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
-    avg_loss /= len(train_loader.sampler)
     acc = 100. * definite_correct / len(train_loader.sampler)
+    if args.just_train and epoch == args.epochs:
+        for i in range(len(models)):
+            saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
+
+    avg_loss /= len(train_loader.sampler)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -895,23 +881,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
     if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
         for i in range(len(models)):
-            if args.visdom:
-                state = {
-                    'model': models[i].state_dict(),
-                    'acc': acc,
-                    'epoch': epoch,
-                    'vis': True,
-                    'vis-win-loss': vis.win_loss,
-                    'vis-win-acc': vis.win_acc
-                }
-            else:
-                state = {
-                    'model': models[i].state_dict(),
-                    'acc': acc,
-                    'epoch': epoch,
-                    'vis': False
-                }
-            torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
+            saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
 
     avg_loss /= len(test_loader.sampler)
     if args.visdom and epoch > 0:
@@ -1334,6 +1304,26 @@ def pref_table_to_all_prefs(preference_table):
     return all_prefs
 
 
+def saveModel(model, acc, epoch, path='./saved/mobilenet.pth'):
+    if vis != 0:
+        state = {
+            'model': model.state_dict(),
+            'acc': acc,
+            'epoch': epoch,
+            'vis': True,
+            'vis-win-loss': vis.win_loss,
+            'vis-win-acc': vis.win_acc
+        }
+    else:
+        state = {
+            'model': model.state_dict(),
+            'acc': acc,
+            'epoch': epoch,
+            'vis': False
+        }
+    torch.save(state, path)
+
+
 def getArgs():
     batch_size = 64
     test_batch_size = 64
@@ -1345,6 +1335,7 @@ def getArgs():
     parser = argparse.ArgumentParser(description="Parameters for training Tree-Net")
     parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
+    parser.add_argument('-jt', '--just-train', action='store_true', help='train only without testing')
     parser.add_argument('-npt', '--no-test', action='store_true', help='do not test for all preferences while training')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
@@ -1530,12 +1521,15 @@ def main():
                         step = 0
                         args.lr *= args.lr_gamma
                     print(args.lr)
-                train_net(model, train_loader, device, epoch, args)
-                test_net(model, val_loader, device, args, epoch)
-                if not no_test:
-                    preference_table = np.load('preference_table.npy')
-                    all_prefs = pref_table_to_all_prefs(preference_table.T)
-                    test_net_all_preferences(model, val_loader, device, args, all_prefs)
+                if args.just_train:
+                    train_net(model, train_loader, device, epoch, args)
+                else:
+                    train_net(model, train_loader, device, epoch, args)
+                    test_net(model, val_loader, device, args, epoch)
+                    if not no_test:
+                        preference_table = np.load('preference_table.npy')
+                        all_prefs = pref_table_to_all_prefs(preference_table.T)
+                        test_net_all_preferences(model, val_loader, device, args, all_prefs)
         else:
             state = torch.load('./saved/mobilenet.pth')
             model.load_state_dict(state['model'])
@@ -1647,18 +1641,21 @@ def main():
                                 vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
-                    train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                    if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        if not no_test:
-                            preference_table = np.load('preference_table.npy')
-                            all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
-                            test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                            if args.calc_storage:
-                                calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                    if args.just_train:
+                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        if prefs is None:
+                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
+                            if not no_test:
+                                preference_table = np.load('preference_table.npy')
+                                all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
+                                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                                if args.calc_storage:
+                                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                        else:
+                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
+                            test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
                 if not models[i] is None:
@@ -1777,18 +1774,21 @@ def main():
                                 vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
-                    train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                    if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        if not no_test:
-                            preference_table = np.load('preference_table.npy')
-                            all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
-                            test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                            if args.calc_storage:
-                                calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                    if args.just_train:
+                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        if prefs is None:
+                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
+                            if not no_test:
+                                preference_table = np.load('preference_table.npy')
+                                all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
+                                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                                if args.calc_storage:
+                                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                        else:
+                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
+                            test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
                 if not models[i] is None:
@@ -1867,18 +1867,21 @@ def main():
                         vis.win_loss = state['vis-win-loss']
             args.epochs += last_epoch
             for epoch in range(last_epoch + 1, args.epochs + 1):
-                train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                if prefs is None:
-                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
-                    if not no_test:
-                        preference_table = np.load('preference_table.npy')
-                        all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                        test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                        if args.calc_storage:
-                            calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
+                if args.just_train:
+                    train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 else:
-                    test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
-                    test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                    train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    if prefs is None:
+                        test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
+                        if not no_test:
+                            preference_table = np.load('preference_table.npy')
+                            all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                            test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                            if args.calc_storage:
+                                calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
+                    else:
+                        test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
+                        test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
                 state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
