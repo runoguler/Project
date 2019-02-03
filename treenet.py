@@ -1336,7 +1336,7 @@ def getArgs():
     parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
     parser.add_argument('-jt', '--just-train', action='store_true', help='train only without testing')
-    parser.add_argument('-npt', '--no-test', action='store_true', help='do not test for all preferences while training')
+    parser.add_argument('-tp', '--test-prefs', action='store_true', help='do not test for all preferences while training')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
     parser.add_argument('-s', '--same', action='store_true', help='use same user preference table to generate the tree')
@@ -1391,7 +1391,7 @@ def main():
     same = args.same
     fine_tune = args.fine_tune
     prefs = args.prefs
-    no_test = args.no_test
+    test_prefs = args.test_prefs
 
     last_epoch = 0
 
@@ -1526,7 +1526,7 @@ def main():
                 else:
                     train_net(model, train_loader, device, epoch, args)
                     test_net(model, val_loader, device, args, epoch)
-                    if not no_test:
+                    if test_prefs:
                         preference_table = np.load('preference_table.npy')
                         all_prefs = pref_table_to_all_prefs(preference_table.T)
                         test_net_all_preferences(model, val_loader, device, args, all_prefs)
@@ -1534,11 +1534,11 @@ def main():
             state = torch.load('./saved/mobilenet.pth')
             model.load_state_dict(state['model'])
             best_acc = state['acc']
-            print(best_acc)
             test_net(model, val_loader, device, args)
-            preference_table = np.load('preference_table.npy')
-            all_prefs = pref_table_to_all_prefs(preference_table.T)
-            test_net_all_preferences(model, val_loader, device, args, all_prefs)
+            if test_prefs:
+                preference_table = np.load('preference_table.npy')
+                all_prefs = pref_table_to_all_prefs(preference_table.T)
+                test_net_all_preferences(model, val_loader, device, args, all_prefs)
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
         load = resume or test or same or fine_tune
@@ -1647,7 +1647,7 @@ def main():
                         train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                         if prefs is None:
                             test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            if not no_test:
+                            if test_prefs:
                                 preference_table = np.load('preference_table.npy')
                                 all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
@@ -1664,11 +1664,12 @@ def main():
                     best_acc = state['acc']
             if prefs is None:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
-                preference_table = np.load('preference_table.npy')
-                all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                if args.calc_storage:
-                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                if test_prefs:
+                    preference_table = np.load('preference_table.npy')
+                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                    test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                    if args.calc_storage:
+                        calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1780,7 +1781,7 @@ def main():
                         train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                         if prefs is None:
                             test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            if not no_test:
+                            if test_prefs:
                                 preference_table = np.load('preference_table.npy')
                                 all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
                                 test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
@@ -1797,11 +1798,12 @@ def main():
                     best_acc = state['acc']
             if prefs is None:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
-                preference_table = np.load('preference_table.npy')
-                all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                if args.calc_storage:
-                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
+                if test_prefs:
+                    preference_table = np.load('preference_table.npy')
+                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                    test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                    if args.calc_storage:
+                        calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
@@ -1873,7 +1875,7 @@ def main():
                     train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
                         test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
-                        if not no_test:
+                        if test_prefs:
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
                             test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
@@ -1889,11 +1891,12 @@ def main():
                 best_acc = state['acc']
             if prefs is None:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
-                preference_table = np.load('preference_table.npy')
-                all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                if args.calc_storage:
-                    calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
+                if test_prefs:
+                    preference_table = np.load('preference_table.npy')
+                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
+                    test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
+                    if args.calc_storage:
+                        calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
             else:
                 test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
