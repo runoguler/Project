@@ -121,11 +121,16 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
+    avg_loss /= len(train_loader.sampler)
+    acc = 100. * definite_correct / len(train_loader.sampler)
     if args.visdom and epoch > 0:
-        avg_loss /= len(train_loader.sampler)
-        acc = 100. * definite_correct / len(train_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
+    if args.log:
+        logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
+    print('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
 
 
 def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
@@ -226,11 +231,17 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
+    avg_loss /= len(train_loader.sampler)
+    acc = 100. * definite_correct / len(train_loader.sampler)
     if args.visdom and epoch > 0:
-        avg_loss /= len(train_loader.sampler)
-        acc = 100. * definite_correct / len(train_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
+
+    if args.log:
+        logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
+    print('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
 
 
 def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, min_depth, max_depth):
@@ -426,21 +437,21 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     }
                 torch.save(state, './saved/treemodel' + str(i) + '.pth')
 
+    avg_loss /= len(test_loader.sampler)
     if args.visdom and epoch > 0:
-        avg_loss /= len(test_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}'.format(
             (definite_correct + indefinite_correct), len(test_loader.sampler),
             100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
-            definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+            definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
-    print('\nTest set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\n'.format(
+    print('\nTest set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
-        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+        definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
 
 
@@ -630,10 +641,15 @@ def train_net(model, train_loader, device, epoch, args):
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
+    losses /= len(train_loader.sampler)
     if args.visdom and epoch > 0:
-        losses /= len(train_loader.sampler)
         vis.plot_loss(losses, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
+    if args.log:
+        logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            losses, correct, len(train_loader.sampler), acc))
+    print('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+        losses, correct, len(train_loader.sampler), acc))
 
 
 def test_net(model, test_loader, device, args, epoch=0):
@@ -793,11 +809,17 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader)))
 
+    avg_loss /= len(train_loader.sampler)
+    acc = 100. * definite_correct / len(train_loader.sampler)
     if args.visdom and epoch > 0:
-        avg_loss /= len(train_loader.sampler)
-        acc = 100. * definite_correct / len(train_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
+
+    if args.log:
+        logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
+    print('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
+            avg_loss, definite_correct, len(train_loader.sampler), acc))
 
 
 def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args, epoch=0):
@@ -891,21 +913,21 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
                 }
             torch.save(state, './saved/parallel_mobilenet' + str(i) + '.pth')
 
+    avg_loss /= len(test_loader.sampler)
     if args.visdom and epoch > 0:
-        avg_loss /= len(test_loader.sampler)
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
+        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
-        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+        definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
-    print('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)'.format(
+    print('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
-        definite_correct, len(test_loader.sampler), 100. * definite_correct / len(test_loader.sampler)
+        definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
 
 
@@ -1416,7 +1438,7 @@ def main():
 
     if args.data_aug == 1:
         train_data_transform = transforms.Compose([
-            transforms.RandomCrop(32, padding=4),
+            transforms.RandomCrop(resize, padding=(resize/8)),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean, sd)
