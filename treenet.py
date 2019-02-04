@@ -9,6 +9,7 @@ import time
 
 from models.mobilenet import MobileNet
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
+import torchvision.models as Models
 
 import utils
 import os
@@ -122,10 +123,11 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                        100. * batch_idx / len(train_loader)))
 
     acc = 100. * definite_correct / len(train_loader.sampler)
-    if args.just_train and epoch == args.epochs:
+    if not args.val_mode and epoch == args.epochs:
         for i in range(len(models)):
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
+        print("Model Saved!")
 
     avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
@@ -237,10 +239,11 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                        100. * batch_idx / len(train_loader)))
 
     acc = 100. * definite_correct / len(train_loader.sampler)
-    if args.just_train and epoch == args.epochs:
+    if not args.val_mode and epoch == args.epochs:
         for i in range(len(models)):
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
+        print("Model Saved!")
 
     avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
@@ -425,11 +428,12 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
+    if args.val_mode and acc > best_acc:
         best_acc = acc
         for i in range(len(models)):
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
+        print("Model Saved!")
 
     avg_loss /= len(test_loader)
     if args.visdom and epoch > 0:
@@ -628,17 +632,18 @@ def train_net(model, train_loader, device, epoch, args):
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
         correct += pred.eq(labels.view_as(pred)).sum().item()
         losses += train_loss.item()
-        acc = 100. * correct / len(train_loader.sampler)
 
         if batch_idx % args.log_interval == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
+    acc = 100. * correct / len(train_loader.sampler)
     losses /= len(train_loader)
 
-    if args.just_train and epoch == args.epochs:
+    if not args.val_mode and epoch == args.epochs:
         saveModel(model, acc, epoch, './saved/mobilenet.pth')
+        print("Model Saved!")
 
     if args.visdom and epoch > 0:
         vis.plot_loss(losses, epoch, name='train_loss')
@@ -669,9 +674,10 @@ def test_net(model, test_loader, device, args, epoch=0):
 
     test_loss /= len(test_loader)
     acc = 100. * correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
+    if args.val_mode and acc > best_acc:
         best_acc = acc
         saveModel(model, acc, epoch, './saved/mobilenet.pth')
+        print("Model Saved!")
 
     if args.visdom and epoch > 0:
         vis.plot_loss(test_loss, epoch, name='val_loss')
@@ -792,9 +798,10 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
                        100. * batch_idx / len(train_loader)))
 
     acc = 100. * definite_correct / len(train_loader.sampler)
-    if args.just_train and epoch == args.epochs:
+    if not args.val_mode and epoch == args.epochs:
         for i in range(len(models)):
             saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
+        print("Model Saved!")
 
     avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
@@ -878,7 +885,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
-    if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
+    if args.val_mode and acc > best_acc:
         best_acc = acc
         for i in range(len(models)):
             saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
@@ -1435,10 +1442,11 @@ def main():
             transforms.Normalize(mean, sd)
         ])
         val_data_transform = transforms.Compose([
+            transforms.Resize((resize, resize)),
             transforms.ToTensor(),
             transforms.Normalize(mean, sd)
         ])
-    else:
+    elif args.data_aug == 2:
         train_data_transform = transforms.Compose([
             transforms.RandomHorizontalFlip(),
             #transforms.RandomRotation(20),
@@ -1449,6 +1457,19 @@ def main():
         ])
         val_data_transform = transforms.Compose([
             transforms.Resize((resize, resize)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
+    else:
+        train_data_transform = transforms.Compose([
+            transforms.RandomResizedCrop(resize, scale=(0.2, 1.0)),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, sd)
+        ])
+        val_data_transform = transforms.Compose([
+            transforms.Resize(int(resize/0.875)),
+            transforms.CenterCrop(resize),
             transforms.ToTensor(),
             transforms.Normalize(mean, sd)
         ])
@@ -1465,7 +1486,7 @@ def main():
         places_validation_data = datasets.ImageFolder(valdir, transform=val_data_transform)
         if no_classes == 365:
             train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
-            val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+            val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=False, **cuda_args)
         else:
             if args.use_classes:
                 train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0, classes=class_labels)
