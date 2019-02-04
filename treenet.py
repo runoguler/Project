@@ -73,7 +73,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
                     res, _ = models[i](results[prev])
                     results[i] = res
                     leaf_node_results.append(res)
-                    if args.visdom and epoch > 0:
+                    if not args.fast_train:
                         pred.append(res.max(1, keepdim=True)[1])
                 else:
                     results[i] = models[i](results[prev])
@@ -95,7 +95,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
-        if args.visdom and epoch > 0:
+        if not args.fast_train:
             for i in range(labels.size(0)):
                 lbl = labels[i].item()
                 ln_index = -1
@@ -130,7 +130,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
     if args.log:
@@ -201,7 +201,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 layer = models[k](layer)
             k = leaf_node_index[i]
             result, _ = models[k](layer)
-            if args.visdom and epoch > 0:
+            if not args.fast_train:
                 pred.append(result.max(1, keepdim=True)[1])
 
             l = losses[i](result, lbls)
@@ -211,7 +211,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
-        if args.visdom and epoch > 0:
+        if not args.fast_train:
             for i in range(labels.size(0)):
                 lbl = labels[i].item()
                 ln_index = -1
@@ -246,7 +246,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
 
@@ -377,12 +377,12 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     res, _ = models[i](results[prev])
                     results[i] = res
                     pred.append(res.max(1, keepdim=True)[1])
-                    if args.visdom and epoch > 0:
+                    if not args.fast_train:
                         leaf_node_results.append(res)
                 else:
                     results[i] = models[i](results[prev])
 
-        if args.visdom and epoch > 0:
+        if not args.fast_train:
             use_cuda = torch.cuda.is_available()
             FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
             losses = []
@@ -436,7 +436,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         print("Model Saved!")
 
     avg_loss /= len(test_loader)
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
@@ -645,7 +645,7 @@ def train_net(model, train_loader, device, epoch, args):
         saveModel(model, acc, epoch, './saved/mobilenet.pth')
         print("Model Saved!")
 
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(losses, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
     if args.log:
@@ -679,7 +679,7 @@ def test_net(model, test_loader, device, args, epoch=0):
         saveModel(model, acc, epoch, './saved/mobilenet.pth')
         print("Model Saved!")
 
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(test_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
     if args.log:
@@ -753,7 +753,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         for i in range(len(models)):
             optims[i].zero_grad()
             output = models[i](data)
-            if args.visdom and epoch > 0:
+            if not args.fast_train:
                 pred.append(output.max(1, keepdim=True)[1])
 
             lbls = labels.clone()
@@ -770,7 +770,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
 
         avg_loss += (sum(lss_list) / float(len(lss_list)))
 
-        if args.visdom and epoch > 0:
+        if not args.fast_train:
             for i in range(labels.size(0)):
                 lbl = labels[i].item()
                 ln_index = -1
@@ -804,7 +804,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
 
@@ -836,10 +836,10 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
         for i in range(len(models)):
             output = models[i](data)
             pred.append(output.max(1, keepdim=True)[1])
-            if args.visdom and epoch > 0:
+            if not args.fast_train:
                 leaf_node_results.append(output)
 
-        if args.visdom and epoch > 0:
+        if not args.fast_train:
             use_cuda = torch.cuda.is_available()
             FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
             losses = []
@@ -891,7 +891,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
             saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
 
     avg_loss /= len(test_loader)
-    if args.visdom and epoch > 0:
+    if args.visdom:
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
 
@@ -1349,6 +1349,7 @@ def getArgs():
     parser.add_argument('-s', '--same', action='store_true', help='use same user preference table to generate the tree')
     parser.add_argument('-l', '--log', action='store_true', help='log the events')
     parser.add_argument('-ll', '--limit-log', action='store_true', help='do not log initial logs')
+    parser.add_argument('-ft', '--fast-train', action='store_true', help='does not calculate unnecessary things')
     parser.add_argument('-nw', '--no-weights', action='store_true', help='train without class weights')
     parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
