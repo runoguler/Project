@@ -653,7 +653,7 @@ def train_net(model, train_loader, device, epoch, args):
 def test_net(model, test_loader, device, args, epoch=0):
     global best_acc
     model.eval()
-    loss = torch.nn.CrossEntropyLoss(size_average=False)
+    loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
 
     test_loss = 0
@@ -1429,7 +1429,7 @@ def main():
 
     if args.data_aug == 1:
         train_data_transform = transforms.Compose([
-            transforms.RandomCrop(resize, padding=(resize/8)),
+            transforms.RandomCrop(resize, padding=(int(resize/8))),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean, sd)
