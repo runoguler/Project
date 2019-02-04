@@ -127,7 +127,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
 
-    avg_loss /= len(train_loader.sampler)
+    avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -242,7 +242,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
 
-    avg_loss /= len(train_loader.sampler)
+    avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -431,7 +431,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
             if not models[i] is None:
                 saveModel(models[i], acc, epoch, './saved/treemodel' + str(i) + '.pth')
 
-    avg_loss /= len(test_loader.sampler)
+    avg_loss /= len(test_loader)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
@@ -635,7 +635,7 @@ def train_net(model, train_loader, device, epoch, args):
                 epoch, batch_idx * len(data), len(train_loader.sampler),
                        100. * batch_idx / len(train_loader), train_loss.item()))
 
-    losses /= len(train_loader.sampler)
+    losses /= len(train_loader)
 
     if args.just_train and epoch == args.epochs:
         saveModel(model, acc, epoch, './saved/mobilenet.pth')
@@ -667,7 +667,7 @@ def test_net(model, test_loader, device, args, epoch=0):
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
         correct += pred.eq(labels.view_as(pred)).sum().item()
 
-    test_loss /= len(test_loader.sampler)
+    test_loss /= len(test_loader)
     acc = 100. * correct / len(test_loader.sampler)
     if (args.val_mode and acc > best_acc) or (not args.val_mode and epoch == args.epochs):
         best_acc = acc
@@ -796,7 +796,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
         for i in range(len(models)):
             saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
 
-    avg_loss /= len(train_loader.sampler)
+    avg_loss /= len(train_loader)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='train_loss')
         vis.plot_acc(acc, epoch, name='train_acc')
@@ -883,7 +883,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
         for i in range(len(models)):
             saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
 
-    avg_loss /= len(test_loader.sampler)
+    avg_loss /= len(test_loader)
     if args.visdom and epoch > 0:
         vis.plot_loss(avg_loss, epoch, name='val_loss')
         vis.plot_acc(acc, epoch, name='val_acc')
