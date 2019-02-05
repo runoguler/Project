@@ -605,7 +605,7 @@ def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, arg
     print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
-def train_net(model, train_loader, device, epoch, args):
+def train_net(model, train_loader, device, epoch, args, save_name="net"):
     model.train()
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
@@ -617,7 +617,6 @@ def train_net(model, train_loader, device, epoch, args):
 
     losses = 0
     correct = 0
-    acc = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
         if args.use_classes:
@@ -642,7 +641,7 @@ def train_net(model, train_loader, device, epoch, args):
     losses /= len(train_loader)
 
     if not args.val_mode and epoch == args.epochs:
-        saveModel(model, acc, epoch, './saved/mobilenet.pth')
+        saveModel(model, acc, epoch, './saved/' + save_name + '.pth')
         print("Model Saved!")
 
     if args.visdom:
@@ -655,7 +654,7 @@ def train_net(model, train_loader, device, epoch, args):
         losses, correct, len(train_loader.sampler), acc))
 
 
-def test_net(model, test_loader, device, args, epoch=0):
+def test_net(model, test_loader, device, args, epoch=0, save_name="net"):
     global best_acc
     model.eval()
     loss = torch.nn.CrossEntropyLoss()
@@ -676,7 +675,7 @@ def test_net(model, test_loader, device, args, epoch=0):
     acc = 100. * correct / len(test_loader.sampler)
     if args.val_mode and acc > best_acc:
         best_acc = acc
-        saveModel(model, acc, epoch, './saved/mobilenet.pth')
+        saveModel(model, acc, epoch, './saved/' + save_name + '.pth')
         print("Model Saved!")
 
     if args.visdom:
@@ -1353,6 +1352,7 @@ def getArgs():
     parser.add_argument('-nw', '--no-weights', action='store_true', help='train without class weights')
     parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
+    parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7], help='choose models')
     parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
     parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
     parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
@@ -1382,6 +1382,7 @@ def getArgs():
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
     parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2], help='choose the data augmentation')
+    parser.add_argument('-pre', '--pre-trained', action='store_true', help='saves the best accuracy model in each test')
     args = parser.parse_args()
     return args
 
@@ -1502,10 +1503,30 @@ def main():
 
     fcl_factor = resize // 32
 
-    if args.mobile_net:
-        model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
+    if args.mobile_net or args.model != 0:
+        if args.mobile_net or args.model == 1:
+            model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
+            save_name = "mobilenet"
+        elif args.model == 2:
+            model = Models.vgg16(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "vggnet"
+        elif args.model == 3:
+            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "alexnet"
+        elif args.model == 4:
+            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "resnet18"
+        elif args.model == 5:
+            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "densenet161"
+        elif args.model == 6:
+            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "inceptionv3net"
+        else:
+            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes)
+            save_name = "squeezenet1.0"
         if args.log:
-            logging.info("Mobile-Net")
+            logging.info(save_name)
             if args.fine_tune:
                 logging.info("fine-tune")
             elif resume:
@@ -1528,7 +1549,7 @@ def main():
                 logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
-                state = torch.load('./saved/mobilenet.pth')
+                state = torch.load('./saved/' + save_name + '.pth')
                 model.load_state_dict(state['model'])
                 best_acc = state['acc']
                 last_epoch = state['epoch']
@@ -1537,26 +1558,20 @@ def main():
                     vis.win_loss = state['vis-win-loss']
             args.epochs += last_epoch
             for epoch in range(last_epoch + 1, args.epochs + 1):
-                if args.lr_scheduler:
-                    step += 1
-                    if step == args.lr_step:
-                        step = 0
-                        args.lr *= args.lr_gamma
-                    print(args.lr)
                 if args.just_train:
-                    train_net(model, train_loader, device, epoch, args)
+                    train_net(model, train_loader, device, epoch, args, save_name)
                 else:
-                    train_net(model, train_loader, device, epoch, args)
-                    test_net(model, val_loader, device, args, epoch)
+                    train_net(model, train_loader, device, epoch, args, save_name)
+                    test_net(model, val_loader, device, args, epoch, save_name)
                     if test_prefs:
                         preference_table = np.load('preference_table.npy')
                         all_prefs = pref_table_to_all_prefs(preference_table.T)
                         test_net_all_preferences(model, val_loader, device, args, all_prefs)
         else:
-            state = torch.load('./saved/mobilenet.pth')
+            state = torch.load('./saved/' + save_name + '.pth')
             model.load_state_dict(state['model'])
             best_acc = state['acc']
-            test_net(model, val_loader, device, args)
+            test_net(model, val_loader, device, args, save_name=save_name)
             if test_prefs:
                 preference_table = np.load('preference_table.npy')
                 all_prefs = pref_table_to_all_prefs(preference_table.T)
