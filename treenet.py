@@ -1383,6 +1383,7 @@ def getArgs():
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
     parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2], help='choose the data augmentation')
     parser.add_argument('-pre', '--pre-trained', action='store_true', help='saves the best accuracy model in each test')
+    parser.add_argument('-mgpu', '--multi-gpu', action='store_true', help='enable using multiple gpu')
     args = parser.parse_args()
     return args
 
@@ -1505,26 +1506,28 @@ def main():
 
     if args.mobile_net or args.model != 0:
         if args.mobile_net or args.model == 1:
-            model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
+            model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024))
             save_name = "mobilenet"
         elif args.model == 2:
-            model = Models.vgg16(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.vgg16_bn(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "vggnet"
         elif args.model == 3:
-            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "alexnet"
         elif args.model == 4:
-            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "resnet18"
         elif args.model == 5:
-            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "densenet161"
         elif args.model == 6:
-            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "inceptionv3net"
         else:
-            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes).to(device)
+            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "squeezenet1.0"
+        if use_cuda and torch.cuda.device_count() > 1 and args.mgpu: model = torch.nn.DataParallel(model)
+        model.to(device)
         if args.log:
             logging.info(save_name)
             if args.fine_tune:
