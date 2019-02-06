@@ -1526,7 +1526,7 @@ def main():
         else:
             model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes)
             save_name = "squeezenet1.0"
-        if use_cuda and torch.cuda.device_count() > 1 and args.mgpu: model = torch.nn.DataParallel(model)
+        if use_cuda and torch.cuda.device_count() > 1 and args.multi_gpu: model = torch.nn.DataParallel(model)
         model.to(device)
         if args.log:
             logging.info(save_name)
