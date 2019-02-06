@@ -1508,22 +1508,22 @@ def main():
             model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024)).to(device)
             save_name = "mobilenet"
         elif args.model == 2:
-            model = Models.vgg16(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.vgg16(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "vggnet"
         elif args.model == 3:
-            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "alexnet"
         elif args.model == 4:
-            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "resnet18"
         elif args.model == 5:
-            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "densenet161"
         elif args.model == 6:
-            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "inceptionv3net"
         else:
-            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes)
+            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes).to(device)
             save_name = "squeezenet1.0"
         if args.log:
             logging.info(save_name)
