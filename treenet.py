@@ -1083,7 +1083,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
                 models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
             elif model == 2:
                 models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
-                                       out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                       out_channel=cfg_full[-2] * fcl_factor * fcl_factor,
                                        num_classes=2).to(device))
             nodes.append(None)
             leaf_node_labels.append((left,))
@@ -1103,7 +1103,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
                     models.append(MobileTreeLeafNet(branch=(right.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
                 elif model == 2:
                     models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
-                                           out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                           out_channel=cfg_full[-2] * fcl_factor * fcl_factor,
                                            num_classes=(left.count + 1)).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(right.value)
@@ -1112,7 +1112,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
                 models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
             elif model == 2:
                 models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
-                                       out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                       out_channel=cfg_full[-2] * fcl_factor * fcl_factor,
                                        num_classes=2).to(device))
 
             nodes.append(None)
@@ -1770,7 +1770,7 @@ def main():
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
-            logging.info("Mobile Tree Net Old")
+            logging.info("Mobile Tree Net Old") if modelno == 1 else logging.info("VGG Tree Net")
             if fine_tune:
                 logging.info("fine-tune")
             elif resume:
