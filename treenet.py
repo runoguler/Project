@@ -1058,7 +1058,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
             for i in range(conv_step, len(cfg_full) - not_involve, 2):
                 if isinstance(cfg_full[i], int):
                     cfg_full[i] = int(cfg_full[i] // dividing_factor)
-                else:
+                elif isinstance(cfg_full[1],tuple):
                     cfg_full[i] = (int(cfg_full[i][0] // dividing_factor), cfg_full[i][1])
 
         # LEFT BRANCH
@@ -1757,11 +1757,15 @@ def main():
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.mobile_tree_net_old or args.vgg_tree:
-        print("Mobile Tree Net Old")
+        if args.mobile_tree_net_old:
+            print("Mobile Tree Net Old")
+            modelno = 1
+        else:
+            print("VGG Tree Net")
+            modelno = 2
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         dividing_factor = 2 if args.div_factor == -1 else args.div_factor
-        modelno = 1 if args.mobile_tree_net_old else 2
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
