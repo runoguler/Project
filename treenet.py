@@ -1104,7 +1104,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
                 elif model == 2:
                     models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
                                            out_channel=cfg_full[-2] * fcl_factor * fcl_factor,
-                                           num_classes=(left.count + 1)).to(device))
+                                           num_classes=(right.count + 1)).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(right.value)
         else:
