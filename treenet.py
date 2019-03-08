@@ -1075,7 +1075,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
                 if model == 1:
                     models.append(MobileTreeLeafNet(branch=(left.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
                 elif model == 2:
-                    models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes, out_channel=cfg_full[-1]*fcl_factor*fcl_factor, num_classes=(left.count + 1)).to(device))
+                    models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes, out_channel=cfg_full[-2]*fcl_factor*fcl_factor, num_classes=(left.count + 1)).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(left.value)
         else:
