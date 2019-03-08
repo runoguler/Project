@@ -1388,10 +1388,11 @@ def getArgs():
     parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
     parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7], help='choose models')
-    parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net instead of tree-net')
-    parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net instead of tree-net')
-    parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net instead of tree-net')
-    parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old instead of tree-net')
+    parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net')
+    parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net')
+    parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net')
+    parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old')
+    parser.add_argument('-vt', '--vgg-tree', action='store_true', help='train vgg-tree')
     parser.add_argument('-d', '--depth', type=int, default=depth, metavar='lvl', help='depth of the tree (default: 1)')
     parser.add_argument('-b', '--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
     parser.add_argument('-tb', '--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 64)')
@@ -1626,7 +1627,7 @@ def main():
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         dividing_factor = 2 if args.div_factor == -1 else args.div_factor
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
@@ -1755,12 +1756,13 @@ def main():
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
-    elif args.mobile_tree_net_old:
+    elif args.mobile_tree_net_old or args.vgg_tree:
         print("Mobile Tree Net Old")
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         dividing_factor = 2 if args.div_factor == -1 else args.div_factor
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
+        modelno = 1 if args.mobile_tree_net_old else 2
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
