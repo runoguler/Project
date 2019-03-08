@@ -70,4 +70,4 @@ class MobileTreeLeafNet(nn.Module):
         out = F.avg_pool2d(out, 2)
         result = out.view(out.size(0), -1)
         result = self.linear(result)
-        return result, out
+        return result

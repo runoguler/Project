@@ -71,7 +71,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
             if not models[i] is None:
                 prev = (i + 1) // 2 - 1
                 if i in leaf_node_index:
-                    res, _ = models[i](results[prev])
+                    res = models[i](results[prev])
                     results[i] = res
                     leaf_node_results.append(res)
                     if not args.fast_train:
@@ -199,9 +199,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i]) - 1):
                 k = leaf_node_paths[i][j]
-                layer = models[k](layer)
-            k = leaf_node_index[i]
-            result, _ = models[k](layer)
+                result = models[k](layer)
             if not args.fast_train:
                 pred.append(result.max(1, keepdim=True)[1])
 
@@ -319,9 +317,7 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i])-1):
                 k = leaf_node_paths[i][j]
-                layer = models[k](layer)
-            k = leaf_node_index[i]
-            result, _ = models[k](layer)
+                result = models[k](layer)
 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
@@ -375,7 +371,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
             if not models[i] is None:
                 prev = (i + 1) // 2 - 1
                 if i in leaf_node_index:
-                    res, _ = models[i](results[prev])
+                    res = models[i](results[prev])
                     results[i] = res
                     pred.append(res.max(1, keepdim=True)[1])
                     if not args.fast_train:
@@ -489,8 +485,9 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
+                result = models[k](layer)
                 if j + 1 == len(leaf_node_paths[i]):
-                    result, _ = models[k](layer)
+                    result = models[k](layer)
                     pred.append(result.max(1, keepdim=True)[1])
                 else:
                     layer = models[k](layer)
@@ -568,7 +565,7 @@ def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, arg
             for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
                 if j + 1 == len(leaf_node_paths[i]):
-                    result, _ = models[k](layer)
+                    result = models[k](layer)
                     pred.append(result.max(1, keepdim=True)[1])
                 else:
                     layer = models[k](layer)
