@@ -150,7 +150,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
     for i in range(len(models)):
         if not models[i] is None:
             models[i].train()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     losses = []
@@ -1022,7 +1022,7 @@ def test_parallel_all_preferences(models, leaf_node_labels, test_loader, device,
     print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
-def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
+def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step=3, step=3, dividing_factor=2, dividing_step= 2, not_involve=1, log=False):
     ### Model: 1 -- MobileNet V1
     ### Model: 2 -- VGG_16_BN
     leaf_node_labels = []
@@ -1055,7 +1055,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
 
         if prev_lvl < lvl:
             prev_lvl = lvl
-            for i in range(conv_step, len(cfg_full) - not_involve, 2):
+            for i in range(conv_step, len(cfg_full) - not_involve, dividing_step):
                 if isinstance(cfg_full[i], int):
                     cfg_full[i] = int(cfg_full[i] // dividing_factor)
                 elif isinstance(cfg_full[1],tuple):
@@ -1410,7 +1410,8 @@ def getArgs():
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
-    parser.add_argument('-df', '--div-factor', type=int, default=-1, help='dividing factor in networks')
+    parser.add_argument('-df', '--div-factor', type=int, default=2, help='dividing factor in networks')
+    parser.add_argument('-ds', '--div-step', type=int, default=2, help='dividing factor in networks')
     parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
@@ -1626,9 +1627,8 @@ def main():
         print("Mobile Tree Net")
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
-        dividing_factor = 2 if args.div_factor == -1 else args.div_factor
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
-                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
+                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net")
@@ -1765,9 +1765,8 @@ def main():
             modelno = 2
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
-        dividing_factor = 2 if args.div_factor == -1 else args.div_factor
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
-                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
+                                                       root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net Old") if modelno == 1 else logging.info("VGG Tree Net")
