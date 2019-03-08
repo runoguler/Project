@@ -1384,7 +1384,7 @@ def getArgs():
     parser.add_argument('-l', '--log', action='store_true', help='log the events')
     parser.add_argument('-ll', '--limit-log', action='store_true', help='do not log initial logs')
     parser.add_argument('-ft', '--fast-train', action='store_true', help='does not calculate unnecessary things')
-    parser.add_argument('-nw', '--no-weights', action='store_true', help='train without class weights')
+    parser.add_argument('-nw', '--no-weights', action='store_false', help='train without class weights')
     parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
     parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7], help='choose models')
