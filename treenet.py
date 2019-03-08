@@ -9,6 +9,7 @@ import time
 
 from models.mobilenet import MobileNet
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
+from models.vgg_tree_net import VGG_Branch, VGG_Leaf
 import torchvision.models as Models
 
 import utils
@@ -1021,15 +1022,20 @@ def test_parallel_all_preferences(models, leaf_node_labels, test_loader, device,
     print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
-def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
+def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step=1, step=3, dividing_factor=2, not_involve=1, log=False):
+    ### Model: 1 -- MobileNet V1
+    ### Model: 2 -- VGG_16_BN
     leaf_node_labels = []
-    cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
-    models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
+    if model == 1:
+        cfg_full = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
+        models = [MobileTreeRootNet(cfg_full[:root_step]).to(device)]
+    elif model == 2:
+        cfg_full = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
+        models = [VGG_Branch(cfg_full[:root_step]).to(device)]
     nodes = [(root_node, 0)]
     index = 0
     remaining = 1
     prev_lvl = 0
-    # steps = [3,6,6,9,9,9,9,12,12,12,12,12,12,12,12,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15,15]
     while remaining > 0:
         if nodes[index] is None:
             models.append(None)
@@ -1042,7 +1048,10 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
         lvl = nodes[index][1] + 1
 
         conv_step = (step * (lvl - 1)) + root_step
-        in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 1][0]
+        if model == 1:
+            in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 1][0]
+        elif model == 2:
+            in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step]
 
         if prev_lvl < lvl:
             prev_lvl = lvl
@@ -1056,15 +1065,26 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
         left = nodes[index][0].left
         if not isinstance(left, int):
             if left.count > 3 and lvl < level:
-                models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                if model == 1:
+                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                elif model == 2:
+                    models.append(VGG_Branch(cfg_full[conv_step:conv_step+3], in_channels=in_planes).to(device))
                 nodes.append((left, lvl))
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(left.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+                if model == 1:
+                    models.append(MobileTreeLeafNet(branch=(left.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+                elif model == 2:
+                    models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes, out_channel=cfg_full[-1]*fcl_factor*fcl_factor, num_classes=(left.count + 1)).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(left.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+            if model == 1:
+                models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+            elif model == 2:
+                models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
+                                       out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                       num_classes=2).to(device))
             nodes.append(None)
             leaf_node_labels.append((left,))
 
@@ -1072,15 +1092,29 @@ def generate_model_list(root_node, level, device, fcl_factor, root_step=1, step=
         right = nodes[index][0].right
         if not isinstance(right, int):
             if right.count > 3 and lvl < level:
-                models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                if model == 1:
+                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                elif model == 2:
+                    models.append(VGG_Branch(cfg_full[conv_step:conv_step+3]).to(device))
                 nodes.append((right, lvl))
                 remaining += 1
             else:
-                models.append(MobileTreeLeafNet(branch=(right.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+                if model == 1:
+                    models.append(MobileTreeLeafNet(branch=(right.count + 1), input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+                elif model == 2:
+                    models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
+                                           out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                           num_classes=(left.count + 1)).to(device))
                 nodes.append(None)
                 leaf_node_labels.append(right.value)
         else:
-            models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+            if model == 1:
+                models.append(MobileTreeLeafNet(branch=2, input=cfg_full[conv_step:], in_planes=in_planes, fcl=cfg_full[-1]*fcl_factor*fcl_factor).to(device))
+            elif model == 2:
+                models.append(VGG_Leaf(cfg_full[conv_step:], in_channels=in_planes,
+                                       out_channel=cfg_full[-1] * fcl_factor * fcl_factor,
+                                       num_classes=2).to(device))
+
             nodes.append(None)
             leaf_node_labels.append((right,))
 
@@ -1340,6 +1374,7 @@ def getArgs():
 
     parser = argparse.ArgumentParser(description="Parameters for training Tree-Net")
     parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
+    parser.add_argument('-cf2', '--cifar100', action='store_true', help='uses Cifar-100 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
     parser.add_argument('-jt', '--just-train', action='store_true', help='train only without testing')
     parser.add_argument('-tp', '--test-prefs', action='store_true', help='do not test for all preferences while training')
@@ -1381,7 +1416,7 @@ def getArgs():
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
     parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
-    parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2], help='choose the data augmentation')
+    parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2, 3], help='choose the data augmentation')
     parser.add_argument('-pre', '--pre-trained', action='store_true', help='saves the best accuracy model in each test')
     parser.add_argument('-mgpu', '--multi-gpu', action='store_true', help='enable using multiple gpu')
     args = parser.parse_args()
@@ -1428,7 +1463,7 @@ def main():
     device = torch.device("cuda" if use_cuda else "cpu")
     cuda_args = {'num_workers': args.num_workers, 'pin_memory': True} if use_cuda else {}
 
-    if args.cifar10:
+    if args.cifar10 or args.cifar100:
         mean = (0.4914, 0.4822, 0.4465)
         sd = (0.2023, 0.1994, 0.2010)
         resize = 32
@@ -1482,6 +1517,13 @@ def main():
         cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=val_data_transform)
         train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
         val_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+    elif args.cifar100:
+        cifar_100_training_data = datasets.CIFAR100("../data/CIFAR100", train=True, transform=train_data_transform, download=True)
+        cifar_100_testing_data = datasets.CIFAR100("../data/CIFAR100", train=False, transform=val_data_transform)
+        train_loader = torch.utils.data.DataLoader(cifar_100_training_data, batch_size=args.batch_size, shuffle=True,
+                                                   **cuda_args)
+        val_loader = torch.utils.data.DataLoader(cifar_100_testing_data, batch_size=args.test_batch_size, shuffle=True,
+                                                 **cuda_args)
     else:
         traindir = os.path.join('../places365/places365_standard', 'train')
         valdir = os.path.join('../places365/places365_standard', 'val')
@@ -1718,7 +1760,7 @@ def main():
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         dividing_factor = 2 if args.div_factor == -1 else args.div_factor
-        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor,
+        models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=dividing_factor,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
         if args.log and not args.limit_log:

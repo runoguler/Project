@@ -16,7 +16,7 @@ class TreeNode():
         self.right = right
         self.left_depth = left_depth
         self.right_depth = right_depth
-        self.depth = min(left_depth, right_depth)
+        self.depth = min(left_depth, right_depth) + 1
         self.count = len(value)
 
     def __str__(self, level = 0):
@@ -108,15 +108,15 @@ def linkage_to_tree(Z, classes):
     nodes = []
     for i in range(len(Z)):
         if Z[i][1] < classes:
-            nodes.append(TreeNode((int(Z[i][0]), int(Z[i][1])), int(Z[i][0]), int(Z[i][1]), 0, 0))
+            nodes.append(TreeNode((int(Z[i][0]), int(Z[i][1])), int(Z[i][0]), int(Z[i][1]), -1, -1))
         else:
             if Z[i][0] >= classes:
                 index_0 = int(Z[i][0] - classes)
                 index_1 = int(Z[i][1] - classes)
-                nodes.append(TreeNode((nodes[index_0].value + nodes[index_1].value), nodes[index_0], nodes[index_1], nodes[index_0].depth + 1, nodes[index_1].depth + 1))
+                nodes.append(TreeNode((nodes[index_0].value + nodes[index_1].value), nodes[index_0], nodes[index_1], nodes[index_0].depth, nodes[index_1].depth))
             else:
                 index = int(Z[i][1] - classes)
-                nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth + 1, 0))
+                nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth, -1))
     return nodes[-1]
 
 
