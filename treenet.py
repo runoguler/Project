@@ -199,7 +199,9 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i]) - 1):
                 k = leaf_node_paths[i][j]
-                result = models[k](layer)
+                layer = models[k](layer)
+            k = leaf_node_index[i]
+            result = models[k](layer)
             if not args.fast_train:
                 pred.append(result.max(1, keepdim=True)[1])
 
@@ -317,7 +319,9 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i])-1):
                 k = leaf_node_paths[i][j]
-                result = models[k](layer)
+                layer = models[k](layer)
+            k = leaf_node_index[i]
+            result = models[k](layer)
 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
@@ -485,7 +489,6 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
             layer = models[0](data)
             for j in range(len(leaf_node_paths[i])):
                 k = leaf_node_paths[i][j]
-                result = models[k](layer)
                 if j + 1 == len(leaf_node_paths[i]):
                     result = models[k](layer)
                     pred.append(result.max(1, keepdim=True)[1])
