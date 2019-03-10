@@ -56,6 +56,8 @@ class VGG_Leaf(nn.Module):
 
     def __init__(self, cfg, in_channels, out_channel, hidden_layer=4096, num_classes=1000, batch_norm=True, init_weights=True):
         super(VGG_Leaf, self).__init__()
+        if out_channel <= 1024:
+            hidden_layer = 512
 
         self.features = make_layers(cfg, in_channels, batch_norm)
         self.classifier = nn.Sequential(

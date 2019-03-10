@@ -22,7 +22,9 @@ class Block(nn.Module):
         out = F.relu(self.bn2(self.conv2(out)))
         return out
 
-
+### ImageNet to CIFAR-10 conversion: (3x224x224 size image --> 3x32x32)
+### First stride is 2 --> 1
+### AvgPool2d is 7 --> 2
 class MobileNet(nn.Module):
     # (128,2) means conv planes=128, conv stride=2, by default conv stride=1
     cfg = [64, (128,2), 128, (256,2), 256, (512,2), 512, 512, 512, 512, 512, (1024,2), 1024]

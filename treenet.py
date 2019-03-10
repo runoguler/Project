@@ -37,7 +37,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
         if not models[i] is None:
             models[i].train()
             list_of_model_params += models[i].parameters()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     losses = []
@@ -274,7 +274,7 @@ def train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, ar
                 models[i].train()
                 for param in models[i].parameters():
                     param.requires_grad = False
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     losses = []
@@ -346,7 +346,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     for i in range(len(models)):
         if not models[i] is None:
             models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     for i in leaf_node_index:
@@ -461,7 +461,7 @@ def test_tree_personal(models, leaf_node_labels, test_loader, device, args, pref
     for i in range(len(models)):
         if not models[i] is None:
             models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     for i in leaf_node_index:
@@ -545,7 +545,7 @@ def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, arg
     for i in range(len(models)):
         if not models[i] is None:
             models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
 
     for i in leaf_node_index:
@@ -1270,7 +1270,7 @@ def calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, l
         if not models[i] is None:
             params_of_model[i] = sum(p.numel() for p in models[i].parameters())
             models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet):
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                 leaf_node_index.append(i)
     for i in leaf_node_index:
         path = []
@@ -1669,7 +1669,7 @@ def main():
                 in_ln_index = []
                 j = 0
                 for i, model in enumerate(models):
-                    if isinstance(model, MobileTreeLeafNet):
+                    if isinstance(model, MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                         if any(elem in leaf_node_labels[j] for elem in prefs):
                             in_ln_index.append(i)
                         j += 1
@@ -1807,7 +1807,7 @@ def main():
                 in_ln_index = []
                 j = 0
                 for i, model in enumerate(models):
-                    if isinstance(model, MobileTreeLeafNet):
+                    if isinstance(model, MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
                         if any(elem in leaf_node_labels[j] for elem in prefs):
                             in_ln_index.append(i)
                         j += 1
