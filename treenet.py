@@ -1052,7 +1052,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
         if model == 1:
             in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 1][0]
         elif model == 2:
-            in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step]
+            in_planes = cfg_full[conv_step - 1] if isinstance(cfg_full[conv_step - 1], int) else cfg_full[conv_step - 2]
 
         if prev_lvl < lvl:
             prev_lvl = lvl

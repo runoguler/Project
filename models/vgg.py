@@ -25,7 +25,7 @@ class VGG16(nn.Module):
     def __init__(self, cfg=cfg_full, num_classes=1000, fcl=512*7*7, hidden_layer=4096, init_weights=True):
         super(VGG16, self).__init__()
         if fcl <= 1024:
-            hidden_layer = 512
+            hidden_layer = fcl
         self.features = make_layers(cfg, batch_norm=True)
         self.classifier = nn.Sequential(
             nn.Linear(fcl, hidden_layer),
