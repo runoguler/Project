@@ -1556,7 +1556,7 @@ def main():
             save_name = "mobilenet"
         elif args.model == 2:
             # model = Models.vgg16_bn(pretrained=args.pre_trained, num_classes=no_classes)
-            model = VGG16(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024))
+            model = VGG16(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*512))
             save_name = "vggnet"
         elif args.model == 3:
             model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
