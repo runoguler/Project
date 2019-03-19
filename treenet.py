@@ -8,6 +8,7 @@ import logging
 import time
 
 from models.mobilenet import MobileNet
+from models.vgg import VGG16
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
 from models.vgg_tree_net import VGG_Branch, VGG_Leaf
 import torchvision.models as Models
@@ -724,7 +725,7 @@ def test_net_all_preferences(model, test_loader, device, args, all_prefs):
     print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
 
 
-def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     optims = []
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
     losses = []
@@ -800,7 +801,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
     acc = 100. * definite_correct / len(train_loader.sampler)
     if not args.val_mode and epoch == args.epochs:
         for i in range(len(models)):
-            saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
+            saveModel(models[i], acc, epoch, './saved/parallel_net' + str(i) + '.pth')
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
@@ -815,7 +816,7 @@ def train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epo
             avg_loss, definite_correct, len(train_loader.sampler), acc))
 
 
-def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args, epoch=0):
+def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch=0):
     global best_acc
     for model in models:
         model.eval()
@@ -888,7 +889,7 @@ def test_parallel_mobilenet(models, leaf_node_labels, test_loader, device, args,
     if args.val_mode and acc > best_acc:
         best_acc = acc
         for i in range(len(models)):
-            saveModel(models[i], acc, epoch, './saved/parallel_mobilenet' + str(i) + '.pth')
+            saveModel(models[i], acc, epoch, './saved/parallel_net' + str(i) + '.pth')
 
     avg_loss /= len(test_loader)
     if args.visdom:
@@ -1390,6 +1391,7 @@ def getArgs():
     parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7], help='choose models')
     parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net')
     parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net')
+    parser.add_argument('-vp', '--parallel-vgg', action='store_true', help='train parallel-vgg-net')
     parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net')
     parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old')
     parser.add_argument('-vt', '--vgg-tree', action='store_true', help='train vgg-tree')
@@ -1553,7 +1555,8 @@ def main():
             model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024))
             save_name = "mobilenet"
         elif args.model == 2:
-            model = Models.vgg16_bn(pretrained=args.pre_trained, num_classes=no_classes)
+            # model = Models.vgg16_bn(pretrained=args.pre_trained, num_classes=no_classes)
+            model = VGG16(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024))
             save_name = "vggnet"
         elif args.model == 3:
             model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
@@ -1894,21 +1897,26 @@ def main():
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
-    elif args.parallel_mobile_nets:
+    elif args.parallel_mobile_nets or args.parallel_vgg:
         cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
-        dividing_factor = len(leaf_node_labels) if args.div_factor == -1 else args.div_factor
-        for i in range(0, len(cfg), 2):
-            cfg[i] = cfg[i] // dividing_factor if isinstance(cfg[i], int) else (
-            cfg[i][0] // dividing_factor, cfg[i][1])
+        for i in range(0, len(cfg), args.div_step):
+            cfg[i] = cfg[i] // args.div_factor if isinstance(cfg[i], int) else (
+            cfg[i][0] // args.div_factor, cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = len(i) + 1
-            models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // dividing_factor)).to(device))
+            if args.parallel_mobile_nets:
+                models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // args.div_factor)).to(device))
+            elif args.parallel_vgg:
+                models.append(VGG16(num_classes=branches, cfg=cfg, fcl=((fcl_factor*fcl_factor*1024) // args.div_factor)).to(device))
         if args.log:
-            logging.info("Parallel Mobile Nets")
+            if args.parallel_mobile_nets:
+                logging.info("Parallel Mobile Nets")
+            elif args.parallel_vgg:
+                logging.info("Parallel VGG Nets")
             if resume:
                 logging.info("resume")
             elif test:
@@ -1947,7 +1955,7 @@ def main():
         if not test:
             if resume:
                 for i in range(len(models)):
-                    state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
+                    state = torch.load('./saved/parallel_net' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
                     last_epoch = state['epoch']
@@ -1957,11 +1965,11 @@ def main():
             args.epochs += last_epoch
             for epoch in range(last_epoch + 1, args.epochs + 1):
                 if args.just_train:
-                    train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 else:
-                    train_parallel_mobilenet(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                    train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     if prefs is None:
-                        test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
+                        test_parallel_net(models, leaf_node_labels, val_loader, device, args, epoch)
                         if test_prefs:
                             preference_table = np.load('preference_table.npy')
                             all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
@@ -1969,15 +1977,15 @@ def main():
                             if args.calc_storage:
                                 calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
                     else:
-                        test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args, epoch)
+                        test_parallel_net(models, leaf_node_labels, val_loader, device, args, epoch)
                         test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
         else:
             for i in range(len(models)):
-                state = torch.load('./saved/parallel_mobilenet' + str(i) + '.pth')
+                state = torch.load('./saved/parallel_net' + str(i) + '.pth')
                 models[i].load_state_dict(state['model'])
                 best_acc = state['acc']
             if prefs is None:
-                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                test_parallel_net(models, leaf_node_labels, val_loader, device, args)
                 if test_prefs:
                     preference_table = np.load('preference_table.npy')
                     all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
@@ -1985,7 +1993,7 @@ def main():
                     if args.calc_storage:
                         calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
             else:
-                test_parallel_mobilenet(models, leaf_node_labels, val_loader, device, args)
+                test_parallel_net(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
 
     if args.log:
