@@ -1059,7 +1059,7 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
             for i in range(conv_step, len(cfg_full) - not_involve, dividing_step):
                 if isinstance(cfg_full[i], int):
                     cfg_full[i] = int(cfg_full[i] // dividing_factor)
-                elif isinstance(cfg_full[1],tuple):
+                elif isinstance(cfg_full[i],tuple):
                     cfg_full[i] = (int(cfg_full[i][0] // dividing_factor), cfg_full[i][1])
 
         # LEFT BRANCH
@@ -1898,13 +1898,18 @@ def main():
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
     elif args.parallel_mobile_nets or args.parallel_vgg:
-        cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
+        if args.parallel_mobile_nets:
+            cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
+        elif args.parallel_vgg:
+            cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
         load = resume or test or same or fine_tune
         root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(0, len(cfg), args.div_step):
-            cfg[i] = cfg[i] // args.div_factor if isinstance(cfg[i], int) else (
-            cfg[i][0] // args.div_factor, cfg[i][1])
+            if isinstance(cfg[i], int):
+                cfg[i] = cfg[i] // args.div_factor
+            elif isinstance(cfg[i], tuple): (
+                cfg[i][0] // args.div_factor, cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = len(i) + 1
