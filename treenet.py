@@ -1916,7 +1916,7 @@ def main():
             if args.parallel_mobile_nets:
                 models.append(MobileNet(num_classes=branches, channels=cfg, fcl=((fcl_factor*fcl_factor*1024) // args.div_factor)).to(device))
             elif args.parallel_vgg:
-                models.append(VGG16(num_classes=branches, cfg=cfg, fcl=((fcl_factor*fcl_factor*1024) // args.div_factor)).to(device))
+                models.append(VGG16(num_classes=branches, cfg=cfg, fcl=((fcl_factor*fcl_factor*512) // args.div_factor)).to(device))
         if args.log:
             if args.parallel_mobile_nets:
                 logging.info("Parallel Mobile Nets")
