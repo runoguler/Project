@@ -457,7 +457,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     ))
 
 
-def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data, device, args, cuda_args):
+def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data_transform, device, args, cuda_args):
     leaf_node_index = []
     leaf_node_paths = []
 
@@ -481,8 +481,16 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         for label in each_user:
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
+        sampler = IndexSampler(indices)
+        if args.cifar10:
+            data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=data_transform)
+        elif args.cifar100:
+            data = datasets.CIFAR100("../data/CIFAR100", train=False, transform=data_transform)
+        else:
+            valdir = os.path.join('../places365/places365_standard', 'val')
+            data = datasets.ImageFolder(valdir, transform=data_transform)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                  sampler=IndexSampler(indices), **cuda_args)
+                                                  sampler=sampler, **cuda_args)
 
         definite_correct = 0
         for data, label in data_loader:
@@ -2092,12 +2100,7 @@ def main():
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
             if args.test_scenario:
-                if args.cifar10:
-                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
-                elif args.cifar100:
-                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
-                else:
-                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
+                test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
     elif args.parallel_mobile_nets or args.parallel_vgg:
         if args.parallel_mobile_nets:
             cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
