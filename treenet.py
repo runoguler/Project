@@ -482,7 +482,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                  sampler=IndexSampler(indices), drop_last=True, **cuda_args)
+                                                  sampler=IndexSampler(indices), **cuda_args)
 
         definite_correct = 0
         for data, label in data_loader:

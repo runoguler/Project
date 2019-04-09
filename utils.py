@@ -91,7 +91,7 @@ class IndexSampler(Sampler):
         self.indices = indices
 
     def __iter__(self):
-        return iter(self.indices)
+        return (self.indices)
 
     def __len__(self):
         return len(self.indices)
