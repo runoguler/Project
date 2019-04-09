@@ -87,6 +87,7 @@ class Visualizations:
 
 class IndexSampler(Sampler):
     def __init__(self, indices):
+        super().__init__(indices)
         self.indices = indices
 
     def __iter__(self):
