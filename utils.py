@@ -1,6 +1,8 @@
 import numpy as np
+import os
 from scipy.cluster.hierarchy import linkage, dendrogram, cophenet
 from scipy.spatial.distance import pdist
+from sklearn.cluster import AgglomerativeClustering
 import visdom
 
 import matplotlib
@@ -84,6 +86,134 @@ def generate_preference_table(classes, samples, prob=0.3):
     return np.random.choice(2, (classes, samples), p=[(1-prob), prob])
 
 
+def generate_preference_table_new(classes, samples, n_type=10, load_types=True, load_preferences=False):
+    if load_preferences:
+        return np.load('preference_table.npy')
+    if load_types:
+        user_types = np.load('user_types.npy')
+    else:
+        user_types = np.empty((0, classes))
+        for _ in range(n_type):
+            rands = np.random.random(classes)
+            # rands /= rands.sum()
+            user_types = np.vstack((user_types, rands))
+
+        np.save('user_types', user_types)
+
+    selected_types = np.random.randint(0, len(user_types), samples)
+
+    preferences = np.empty((0, classes), dtype=int)
+    for type_index in selected_types:
+        preferences = np.vstack((preferences, np.random.binomial(1, user_types[type_index], classes)))
+    return preferences.T
+
+
+def binarify_2d(arr):
+    for i in range(len(arr)):
+        for j in range(len(arr[i])):
+            arr[i][j] = 1 if arr[i][j] > 1 else 0
+    return arr
+
+
+def generate_hierarchy_trials(classes, n_type=10, load=False):
+    if load and os.path.isfile('user_types.npy'):
+        user_types = np.load('user_types.npy')
+    else:
+        num_pref = np.random.randint(2, 4, n_type)
+        user_types = np.empty((0, classes), dtype=int)
+        for i in range(n_type):
+            preffed = np.random.choice(classes, num_pref[i], replace=False)
+            u_type = np.ones(classes, dtype=int)
+            for j in preffed:
+                u_type[j] = 200
+            user_types = np.vstack((user_types, u_type))
+        np.save('user_types', user_types)
+
+    print(user_types)
+    user_types = binarify_2d(user_types)
+
+    co_mat = user_types.T.dot(user_types)
+    print(co_mat)
+    np.fill_diagonal(co_mat, 0)
+    dist = 1 - co_mat/co_mat.max()
+    print(dist)
+    i, j = np.triu_indices(dist.shape[0], k=1)
+    p_dist = dist[i, j]
+    Q = linkage(p_dist, 'ward', 'precomputed')
+    dendrogram(Q)
+
+    '''
+    num_users_for_each_type = 10
+    length_of_each_user_sample = 100
+    all_tests = np.empty((0, length_of_each_user_sample))
+    for user_type in user_types:
+        for i in range(num_users_for_each_type):
+            test_user = np.random.choice(len(user_type), length_of_each_user_sample, p=np.random.dirichlet(user_type, 1)[0])
+            all_tests = np.vstack((all_tests, test_user))
+    print(user_types)
+    '''
+
+    plt.show()
+    RootNode = linkage_to_tree(Q, classes)
+    return RootNode
+
+
+def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
+    if load and os.path.isfile('user_types.npy'):
+        user_types = np.load('user_types.npy')
+    else:
+        num_pref = np.random.randint(2, 4, n_type)
+        user_types = np.empty((0, classes), dtype=int)
+        for i in range(n_type):
+            preffed = np.random.choice(classes, num_pref[i], replace=False)
+            u_type = np.ones(classes, dtype=int)
+            for j in preffed:
+                u_type[j] = 200
+            user_types = np.vstack((user_types, u_type))
+        np.save('user_types', user_types)
+
+    print(user_types)
+
+    T = linkage(user_types.T, 'single')
+    X = linkage(user_types.T, 'average')
+    Y = linkage(user_types.T, 'weighted')
+    Z = linkage(user_types.T, 'ward')
+    fig, axes = plt.subplots(1, 4, figsize=(16, 3))
+    dendrogram(T, ax=axes[0])
+    dendrogram(X, ax=axes[1])
+    dendrogram(Y, ax=axes[2])
+    dendrogram(Z, ax=axes[3])
+    plt.show()
+
+    RootNode = linkage_to_tree(Z, classes)
+    return RootNode
+
+
+# if there is a memory problem with this function, use generate_users_memoryless() instead
+def generate_users(num_users, num_samples, load=False):
+    if load and os.path.isfile('test_scenario_users.npy'):
+        return np.load('test_scenario_users.npy')
+    user_types = np.load('user_types.npy')
+    test_user_types = np.random.randint(len(user_types), size=num_users)
+    print(test_user_types)
+    test_users = np.empty((0, num_samples), dtype=int)
+    for user_type in test_user_types:
+        test = np.random.choice(len(user_types[user_type]), num_samples, p=np.random.dirichlet(user_types[user_type], 1)[0])
+        test_users = np.vstack((test_users, test))
+    np.save('test_scenario_users', test_users)
+    return test_users
+
+
+# if there is a memory problem with generate_users(), use this instead
+def generate_users_memoryless(num_users, num_samples, seed=123123):
+    np.random.seed(seed)
+    user_types = np.load('user_types.npy')
+    test_user_types = np.random.randint(len(user_types), size=num_users)
+    for user_type in test_user_types:
+        test_user = np.random.choice(len(user_types[user_type]), num_samples, p=np.random.dirichlet(user_types[user_type], 1)[0])
+        yield test_user
+
+
 def simplify_linkage(Z, classes):
     clusters = []
     last_2 = 0
@@ -135,27 +265,27 @@ def generate(classes, samples, load=False, prob=0.3):
 
 def main():
     np.set_printoptions(linewidth=320)
-    preference_table = np.load('preference_table.npy')
-    print(preference_table)
+
+    classes = 10
+    samples = 200
+
+    #root = generate_hierarchy_trials(classes, n_type=20, load=False)
+    root = generate_hierarchy_from_type_distribution(classes, n_type=20, load=False)
+    print(root)
+    print(generate_users(10, 20, load=False))
     exit()
 
-    classes = 365
-    samples = 1000
+    # preference_table = generate_preference_table(classes, samples, prob=0.3)
+    preference_table = generate_preference_table_new(classes, samples, load_types=True, load_preferences=True)
 
-    preference_table = generate_preference_table(classes, samples, prob=0.5)
-    # preference_table = np.array([[0, 1, 0, 1, 0, 0, 1, 1, 1, 0],
-    #                              [1, 0, 1, 0, 1, 1, 0, 0, 0, 1]]).T
     np.save('preference_table', preference_table)
     print('Preference Table: \n', preference_table)
     print('Correlations: \n', np.corrcoef(preference_table))
 
     Z = linkage(preference_table, 'ward')
-    L, last_2 = simplify_linkage(Z, classes)
     RootNode = linkage_to_tree(Z, classes)
     c, coph_dists = cophenet(Z, pdist(preference_table))
     print('Linkage: \n', Z)
-    print('Simplified Linkage: \n', L)
-    print('Last 2: \n', last_2)
     print('Root Node: \n', RootNode)
     # print('Root Node contd: \n', RootNode.left, RootNode.right, RootNode.left.left, RootNode.left.right, RootNode.right.left, RootNode.right.right)
     print('Cophenetic Correlation Coefficient: ', c)

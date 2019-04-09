@@ -6,6 +6,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 import logging
 import time
+from random import randint
 
 from models.mobilenet import MobileNet
 from models.vgg import VGG16
@@ -455,6 +456,77 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     ))
 
 
+def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data, device, args, cuda_args):
+    leaf_node_index = []
+    leaf_node_paths = []
+
+    for i in range(len(models)):
+        if not models[i] is None:
+            models[i].eval()
+            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
+                leaf_node_index.append(i)
+
+    for i in leaf_node_index:
+        path = []
+        while i > 0:
+            path = [i] + path
+            i = (i + 1) // 2 - 1
+        leaf_node_paths.append(path)
+
+    avg_acc = 0
+    for each_user in test_users:
+        # Getting the data for each user
+        indices = []
+        for label in each_user:
+            i = class_indices[label][randint(0, len(class_indices[label])-1)]
+            indices.append(i)
+        data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
+                                                 sampler=SubsetRandomSampler(indices), **cuda_args)
+
+        definite_correct = 0
+        for data, label in data_loader:
+            data, labels = data.to(device), label.to(device)
+            pred = []
+            leaf_node_results = []
+            results = [None] * len(models)
+            results[0] = models[0](data)
+            for i in range(1, len(models)):
+                if not models[i] is None:
+                    prev = (i + 1) // 2 - 1
+                    if i in leaf_node_index:
+                        res = models[i](results[prev])
+                        results[i] = res
+                        pred.append(res.max(1, keepdim=True)[1])
+                        if not args.fast_train:
+                            leaf_node_results.append(res)
+                    else:
+                        results[i] = models[i](results[prev])
+
+            for i in range(labels.size(0)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(leaf_node_index)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        definite_correct += 1
+
+        acc = 100. * definite_correct / len(data_loader.sampler)
+        avg_acc += acc
+    avg_acc /= len(test_users)
+    if args.log:
+        logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+
+
 def test_tree_personal(models, leaf_node_labels, test_loader, device, args, preferences):
     leaf_node_index = []
     leaf_node_paths = []  # NOT INCLUDING models[0]
@@ -690,6 +762,39 @@ def test_net(model, test_loader, device, args, epoch=0, save_name="net"):
         test_loss, correct, len(test_loader.sampler), acc))
 
 
+def test_net_scenario(model, test_users, class_indices, data, device, args, cuda_args):
+    model.eval()
+    loss = torch.nn.CrossEntropyLoss()
+    loss.to(device)
+
+    avg_acc = 0
+    for each_user in test_users:
+        # Getting the data for each user
+        indices = []
+        for label in each_user:
+            i = class_indices[label][randint(0, len(class_indices[label])-1)]
+            indices.append(i)
+        data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
+                                                 sampler=SubsetRandomSampler(indices), **cuda_args)
+        # Testing the data for each user
+        test_loss = 0
+        correct = 0
+        for data, label in data_loader:
+            data, labels = data.to(device), label.to(device)
+            output = model(data)
+            test_loss += loss(output, labels).item()
+            pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
+            correct += pred.eq(labels.view_as(pred)).sum().item()
+        test_loss /= len(data_loader)
+        acc = 100. * correct / len(data_loader.sampler)
+        avg_acc += acc
+    avg_acc /= len(test_users)
+    num_params = calculate_no_of_params(model)
+    if args.log:
+        logging.info('Test Scenario Average Accuracy: ({:.2f}%), Storage: {}'.format(avg_acc, num_params))
+    print('Test Scenario Average Accuracy: ({:.2f}%), Storage: {}'.format(avg_acc, num_params))
+
+
 def test_net_all_preferences(model, test_loader, device, args, all_prefs):
     model.eval()
 
@@ -907,6 +1012,55 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
+
+
+def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, data, device, args, cuda_args):
+    for model in models:
+        model.eval()
+
+    avg_acc = 0
+    for each_user in test_users:
+        # Getting the data for each user
+        indices = []
+        for label in each_user:
+            i = class_indices[label][randint(0, len(class_indices[label]) - 1)]
+            indices.append(i)
+        data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
+                                                  sampler=SubsetRandomSampler(indices), **cuda_args)
+
+        definite_correct = 0
+        for data, label in data_loader:
+            data, labels = data.to(device), label.to(device)
+            pred = []
+            leaf_node_results = []
+            for i in range(len(models)):
+                output = models[i](data)
+                pred.append(output.max(1, keepdim=True)[1])
+                if not args.fast_train:
+                    leaf_node_results.append(output)
+
+            for i in range(len(labels)):
+                lbl = labels[i].item()
+                ln_index = -1
+                for j in range(len(leaf_node_labels)):
+                    if lbl in leaf_node_labels[j]:
+                        k = leaf_node_labels[j].index(lbl)
+                        ln_index = (j, k)
+                        break
+                if pred[ln_index[0]][i] == ln_index[1]:
+                    definite = True
+                    for j in range(len(leaf_node_labels)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                definite = False
+                    if definite:
+                        definite_correct += 1
+        acc = 100. * definite_correct / len(data_loader.sampler)
+        avg_acc += acc
+    avg_acc /= len(test_users)
+    if args.log:
+        logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
 
 
 def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, preferences):
@@ -1159,6 +1313,18 @@ def find_leaf_node_labels(root_node, level):
     return leaf_node_labels
 
 
+def calculate_all_indices_scenario(data, no_classes):
+    indices = [[] for _ in range(no_classes)]
+    print("Calculating All Indices...")
+    for i in range(len(data)):
+        _, label = data[i]
+        indices[label].append(i)
+        if i % 50000 == 0:
+            print('{}/{} ({:.0f}%)'.format(i, len(data), 100. * i / len(data)))
+    print("Calculation Done")
+    return indices
+
+
 def calculate_all_indices(data, train_or_val):
     indices = [[] for _ in range(365)]
     print("Calculating All Indices...")
@@ -1379,6 +1545,7 @@ def getArgs():
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
     parser.add_argument('-jt', '--just-train', action='store_true', help='train only without testing')
     parser.add_argument('-tp', '--test-prefs', action='store_true', help='do not test for all preferences while training')
+    parser.add_argument('-ts', '--test-scenario', action='store_true', help='scenario test')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
     parser.add_argument('-s', '--same', action='store_true', help='use same user preference table to generate the tree')
@@ -1386,28 +1553,31 @@ def getArgs():
     parser.add_argument('-ll', '--limit-log', action='store_true', help='do not log initial logs')
     parser.add_argument('-ft', '--fast-train', action='store_true', help='does not calculate unnecessary things')
     parser.add_argument('-nw', '--no-weights', action='store_false', help='train without class weights')
-    parser.add_argument('-rs', '--resize', type=int, default=resize, metavar='rsz', help='resize images in the dataset (default: 256)')
+    parser.add_argument('-rs', '--resize', type=int, default=resize, help='resize images in the dataset (default: 256)')
     parser.add_argument('-p', '--prefs', nargs='+', type=int)
-    parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2, 3, 4, 5, 6, 7], help='choose models')
-    parser.add_argument('-m0', '--mobile-net', action='store_true', help='train mobile-net')
+    parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2], help='choose models')
     parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net')
     parser.add_argument('-vp', '--parallel-vgg', action='store_true', help='train parallel-vgg-net')
     parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net')
     parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old')
     parser.add_argument('-vt', '--vgg-tree', action='store_true', help='train vgg-tree')
-    parser.add_argument('-d', '--depth', type=int, default=depth, metavar='lvl', help='depth of the tree (default: 1)')
-    parser.add_argument('-b', '--batch-size', type=int, default=batch_size, metavar='N', help='input batch size for training (default: 64)')
-    parser.add_argument('-tb', '--test-batch-size', type=int, default=test_batch_size, metavar='N', help='input batch size for testing (default: 64)')
-    parser.add_argument('-e', '--epochs', type=int, default=epochs, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('-lr', '--lr', type=float, default=lr, metavar='LR', help='learning rate (default: 0.001)')
-    parser.add_argument('-cw', '--num-workers', type=int, default=0, metavar='N', help='number of workers for cuda')
-    parser.add_argument('-w', '--weight-mult', type=float, default=1.0, metavar='N', help='class weight multiplier')
-    parser.add_argument('-pp', '--pref-prob', type=float, default=0.3, metavar='N', help='class weight multiplier')
-    parser.add_argument('-nc', '--num-classes', type=int, default=365, metavar='N', help='train for only first n classes (default: 365)')
-    parser.add_argument('-sm', '--samples', type=int, default=1000, metavar='N', help='number of preferences in the preference table')
+    parser.add_argument('-d', '--depth', type=int, default=depth, help='depth of the tree (default: 1)')
+    parser.add_argument('-b', '--batch-size', type=int, default=batch_size, help='input batch size for training (default: 64)')
+    parser.add_argument('-tb', '--test-batch-size', type=int, default=test_batch_size, help='input batch size for testing (default: 64)')
+    parser.add_argument('-e', '--epochs', type=int, default=epochs, help='number of epochs to train (default: 10)')
+    parser.add_argument('-lr', '--lr', type=float, default=lr, help='learning rate (default: 0.001)')
+    parser.add_argument('-cw', '--num-workers', type=int, default=0, help='number of workers for cuda')
+    parser.add_argument('-w', '--weight-mult', type=float, default=1.0, help='class weight multiplier')
+    parser.add_argument('-pp', '--pref-prob', type=float, default=0.3, help='class weight multiplier')
+    parser.add_argument('-nc', '--num-classes', type=int, default=365, help='train for only first n classes (default: 365)')
+    parser.add_argument('-sm', '--samples', type=int, default=1000, help='number of preferences in the preference table')
+    parser.add_argument('-nut', '--num-user-types', type=int, default=10, help='number of scenario user types')
+    parser.add_argument('-nsu', '--num-scenario-users', type=int, default=100, help='number of scenario test users')
+    parser.add_argument('-lsu', '--load-scenario-users', action='store_true', help='number of scenario test users')
+    parser.add_argument('-nsd', '--scenario-data-length', type=int, default=1000, help='number of test images per scenario test users')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
-    parser.add_argument('-li', '--log-interval', type=int, default=100, metavar='N', help='how many batches to wait before logging training status (default: 100)')
+    parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
@@ -1439,18 +1609,18 @@ def main():
     resume = args.resume
     same = args.same
     fine_tune = args.fine_tune
+    load = resume or test or same or fine_tune
     prefs = args.prefs
     test_prefs = args.test_prefs
 
     last_epoch = 0
 
     no_classes = args.num_classes
-    if args.cifar10:
+    if args.cifar10 and no_classes > 10:
         no_classes = 10
     samples = args.samples
-    if no_classes != 365:
-        if samples == 1000:
-            samples = no_classes * 5
+    if no_classes != 365 and samples == 1000:
+        samples = no_classes * 5
 
     if args.log:
         start_time = time.time()
@@ -1460,6 +1630,8 @@ def main():
         logging.info(time.asctime(time.localtime(start_time)))
         if args.cifar10:
             logging.info("CIFAR-10")
+        elif args.cifar100:
+            logging.info("CIFAR-100")
         else:
             logging.info("Places-365")
 
@@ -1520,14 +1692,12 @@ def main():
         cifar_training_data = datasets.CIFAR10("../data/CIFAR10", train=True, transform=train_data_transform, download=True)
         cifar_testing_data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=val_data_transform)
         train_loader = torch.utils.data.DataLoader(cifar_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
-        val_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=True, **cuda_args)
+        val_loader = torch.utils.data.DataLoader(cifar_testing_data, batch_size=args.test_batch_size, shuffle=False, **cuda_args)
     elif args.cifar100:
         cifar_100_training_data = datasets.CIFAR100("../data/CIFAR100", train=True, transform=train_data_transform, download=True)
         cifar_100_testing_data = datasets.CIFAR100("../data/CIFAR100", train=False, transform=val_data_transform)
-        train_loader = torch.utils.data.DataLoader(cifar_100_training_data, batch_size=args.batch_size, shuffle=True,
-                                                   **cuda_args)
-        val_loader = torch.utils.data.DataLoader(cifar_100_testing_data, batch_size=args.test_batch_size, shuffle=True,
-                                                 **cuda_args)
+        train_loader = torch.utils.data.DataLoader(cifar_100_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
+        val_loader = torch.utils.data.DataLoader(cifar_100_testing_data, batch_size=args.test_batch_size, shuffle=False, **cuda_args)
     else:
         traindir = os.path.join('../places365/places365_standard', 'train')
         valdir = os.path.join('../places365/places365_standard', 'val')
@@ -1548,31 +1718,38 @@ def main():
             val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
                                                        sampler=SubsetRandomSampler(val_indices), **cuda_args)
 
+    root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
+    if args.test_scenario:
+        test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
+                                                   load=args.load_scenario_users)
+        if args.cifar10:
+            if os.path.isfile('all_cifar_val_indices.npy'):
+                class_indices = np.load('all_cifar_val_indices.npy')
+            else:
+                class_indices = calculate_all_indices_scenario(cifar_testing_data, 10)
+                np.save('all_cifar_val_indices.npy', class_indices)
+        elif args.cifar100:
+            if os.path.isfile('all_cifar_100_val_indices.npy'):
+                class_indices = np.load('all_cifar_100_val_indices.npy')
+            else:
+                class_indices = calculate_all_indices_scenario(cifar_100_testing_data, 100)
+                np.save('all_cifar_100_val_indices.npy', class_indices)
+        else:
+            if os.path.isfile('all_places365_val_indices.npy'):
+                class_indices = np.load('all_places365_val_indices.npy')
+            else:
+                class_indices = calculate_all_indices_scenario(places_validation_data, 365)
+                np.save('all_places365_val_indices.npy', class_indices)
+
     fcl_factor = resize // 32
 
-    if args.mobile_net or args.model != 0:
-        if args.mobile_net or args.model == 1:
+    if args.model != 0:
+        if args.model == 1:
             model = MobileNet(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*1024))
             save_name = "mobilenet"
-        elif args.model == 2:
-            # model = Models.vgg16_bn(pretrained=args.pre_trained, num_classes=no_classes)
+        else:
             model = VGG16(num_classes=no_classes, fcl=(fcl_factor*fcl_factor*512))
             save_name = "vggnet"
-        elif args.model == 3:
-            model = Models.alexnet(pretrained=args.pre_trained, num_classes=no_classes)
-            save_name = "alexnet"
-        elif args.model == 4:
-            model = Models.resnet18(pretrained=args.pre_trained, num_classes=no_classes)
-            save_name = "resnet18"
-        elif args.model == 5:
-            model = Models.densenet161(pretrained=args.pre_trained, num_classes=no_classes)
-            save_name = "densenet161"
-        elif args.model == 6:
-            model = Models.inception_v3(pretrained=args.pre_trained, num_classes=no_classes)
-            save_name = "inceptionv3net"
-        else:
-            model = Models.squeezenet1_0(pretrained=args.pre_trained, num_classes=no_classes)
-            save_name = "squeezenet1.0"
         if use_cuda and torch.cuda.device_count() > 1 and args.multi_gpu: model = torch.nn.DataParallel(model)
         model.to(device)
         if args.log:
@@ -1626,10 +1803,16 @@ def main():
                 preference_table = np.load('preference_table.npy')
                 all_prefs = pref_table_to_all_prefs(preference_table.T)
                 test_net_all_preferences(model, val_loader, device, args, all_prefs)
+            if args.test_scenario:
+                if args.cifar10:
+                    test_net_scenario(model, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
+                elif args.cifar100:
+                    test_net_scenario(model, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
+                else:
+                    test_net_scenario(model, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
-        load = resume or test or same or fine_tune
-        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
+        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -1766,8 +1949,7 @@ def main():
         else:
             print("VGG Tree Net")
             modelno = 2
-        load = resume or test or same or fine_tune
-        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
+        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -1897,13 +2079,19 @@ def main():
             else:
                 test_tree(models, leaf_node_labels, val_loader, device, args)
                 test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+            if args.test_scenario:
+                if args.cifar10:
+                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
+                elif args.cifar100:
+                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
+                else:
+                    test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
     elif args.parallel_mobile_nets or args.parallel_vgg:
         if args.parallel_mobile_nets:
             cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         elif args.parallel_vgg:
             cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
-        load = resume or test or same or fine_tune
-        root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
+        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(0, len(cfg), args.div_step):
             if isinstance(cfg[i], int):
@@ -2000,6 +2188,13 @@ def main():
             else:
                 test_parallel_net(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+            if args.test_scenario:
+                if args.cifar10:
+                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
+                elif args.cifar100:
+                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
+                else:
+                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
 
     if args.log:
         end_time = time.time()
