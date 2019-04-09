@@ -9,6 +9,9 @@ import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
 
+from torch.utils.data.sampler import Sampler
+import torch
+
 
 class TreeNode():
     def __init__(self, value, left, right, left_depth, right_depth):
@@ -80,6 +83,17 @@ class Visualizations:
                 ylabel=ylabel
             )
         )
+
+
+class IndexSampler(Sampler):
+    def __init__(self, indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return (self.indices[i] for i in torch.tensor(self.indices))
+
+    def __len__(self):
+        return len(self.indices)
 
 
 def generate_preference_table(classes, samples, prob=0.3):
@@ -196,7 +210,7 @@ def generate_users(num_users, num_samples, load=False):
         return np.load('test_scenario_users.npy')
     user_types = np.load('user_types.npy')
     test_user_types = np.random.randint(len(user_types), size=num_users)
-    print(test_user_types)
+    #print(test_user_types)
     test_users = np.empty((0, num_samples), dtype=int)
     for user_type in test_user_types:
         test = np.random.choice(len(user_types[user_type]), num_samples, p=np.random.dirichlet(user_types[user_type], 1)[0])

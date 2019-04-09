@@ -3,6 +3,7 @@ import numpy as np
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data.sampler import SubsetRandomSampler
+from utils import IndexSampler
 
 import logging
 import time
@@ -481,7 +482,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                 sampler=SubsetRandomSampler(indices), **cuda_args)
+                                                  sampler=IndexSampler(indices), **cuda_args)
 
         definite_correct = 0
         for data, label in data_loader:
@@ -775,7 +776,7 @@ def test_net_scenario(model, test_users, class_indices, data, device, args, cuda
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                 sampler=SubsetRandomSampler(indices), **cuda_args)
+                                                 sampler=IndexSampler(indices), **cuda_args)
         # Testing the data for each user
         test_loss = 0
         correct = 0
@@ -1026,7 +1027,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
             i = class_indices[label][randint(0, len(class_indices[label]) - 1)]
             indices.append(i)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                  sampler=SubsetRandomSampler(indices), **cuda_args)
+                                                  sampler=IndexSampler(indices), **cuda_args)
 
         initialize_models_count = 50
         initialized = False
