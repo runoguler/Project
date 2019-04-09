@@ -1028,9 +1028,20 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
                                                   sampler=SubsetRandomSampler(indices), **cuda_args)
 
+        initialize_models_count = 50
+        initialized = False
+        initialized_labels = []
         definite_correct = 0
         for data, label in data_loader:
             data, labels = data.to(device), label.to(device)
+
+            initialize_models_count -= len(labels)
+            if not initialized and initialize_models_count < 0:
+                for lbl in labels:
+                    if lbl.item() not in initialized_labels:
+                        initialized_labels.append(lbl.item())
+                initialized = True
+
             pred = []
             leaf_node_results = []
             for i in range(len(models)):

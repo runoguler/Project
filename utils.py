@@ -171,6 +171,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
                 u_type[j] = 200
             user_types = np.vstack((user_types, u_type))
         np.save('user_types', user_types)
+    Z = linkage(user_types.T, 'ward')
     '''
     print(user_types)
 
