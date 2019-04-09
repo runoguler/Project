@@ -171,7 +171,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
                 u_type[j] = 200
             user_types = np.vstack((user_types, u_type))
         np.save('user_types', user_types)
-
+    '''
     print(user_types)
 
     T = linkage(user_types.T, 'single')
@@ -184,7 +184,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
     dendrogram(Y, ax=axes[2])
     dendrogram(Z, ax=axes[3])
     plt.show()
-
+    '''
     RootNode = linkage_to_tree(Z, classes)
     return RootNode
 
