@@ -748,7 +748,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
     else:
         print("Storage Calculation Check Failed!")
     avg_acc /= len(test_users)
-    avg_mem /= len(test_users)
+    avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
@@ -1440,7 +1440,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
 
     model_size = calculate_no_of_params(models)
     avg_acc /= len(test_users)
-    avg_mem /= len(test_users)
+    avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
