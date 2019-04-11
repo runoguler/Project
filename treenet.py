@@ -736,7 +736,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
             for j in extra_indices:
                 extra_storage += no_of_params[j]
 
-        storage = (all_models_used_count * sum(no_of_params)) + (initial_storage * initial_models_enough_count) + extra_storage
+        storage = ((all_models_used_count * sum(no_of_params)) + (initial_storage * initial_models_enough_count) + extra_storage) / len(each_user)
 
         acc = 100. * definite_correct / len(data_loader.sampler)
         avg_acc += acc
