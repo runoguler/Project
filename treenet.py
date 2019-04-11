@@ -1183,7 +1183,7 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
             pred.append(output.max(1, keepdim=True)[1])
 
             output_without_else = torch.stack([i[:-1] for i in output])
-            if concat_results == 0:
+            if isinstance(concat_results, int) and concat_results == 0:
                 concat_results = output_without_else
             else:
                 concat_results = torch.cat((concat_results, output_without_else), dim=1)
