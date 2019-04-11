@@ -385,7 +385,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     pred.append(res.max(1, keepdim=True)[1])
 
                     output_without_else = torch.stack([i[:-1] for i in res])
-                    if concat_results == 0:
+                    if isinstance(concat_results, int) and concat_results == 0:
                         concat_results = output_without_else
                     else:
                         concat_results = torch.cat((concat_results, output_without_else), dim=1)
@@ -535,6 +535,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
 
     avg_acc = 0
     avg_mem = 0
+    storage_check = True
     for each_user in test_users:
         # Getting the data for each user
         indices = []
@@ -602,7 +603,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                         pred.append(res.max(1, keepdim=True)[1])
                         pred_probs.append(res.max(1, keepdim=True)[0])
                         output_without_else = torch.stack([i[:-1] for i in res])
-                        if leaf_node_results == 0:
+                        if isinstance(leaf_node_results, int) and leaf_node_results == 0:
                             leaf_node_results = output_without_else
                         else:
                             leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
@@ -708,10 +709,8 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                     if correct:
                         definite_correct += 1
 
-        if initial_models_enough_count + all_models_used_count + len(extra_used_models) == len(data_loader.sampler):
-            print("Storage Calculation Check Success!")
-        else:
-            print("Storage Calculation Check Failed!")
+        if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(data_loader.sampler):
+            storage_check = False
 
         no_of_params = calculate_no_of_params_for_each(models)
 
@@ -729,7 +728,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         for i in range(len(extra_used_models)):
             extra_storage += initial_storage
             extra_indices = [0]
-            for j in extra_used_models[i]:
+            for j in range(len(extra_used_models[i])):
                 path = leaf_node_paths[extra_used_models[i][j]]
                 for k in path:
                     if k not in extra_indices:
@@ -742,11 +741,19 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         acc = 100. * definite_correct / len(data_loader.sampler)
         avg_acc += acc
         avg_mem += storage
+
+    model_size = calculate_no_of_params(models)
+    if storage_check:
+        print("Storage Calculation Check Success!")
+    else:
+        print("Storage Calculation Check Failed!")
     avg_acc /= len(test_users)
     avg_mem /= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+        logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
 def test_tree_personal(models, leaf_node_labels, test_loader, device, args, preferences):
@@ -1328,7 +1335,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                 pred.append(output.max(1, keepdim=True)[1])
                 pred_probs.append(output.max(1, keepdim=True)[0])
                 output_without_else = torch.stack([i[:-1] for i in output])
-                if leaf_node_results == 0:
+                if isinstance(leaf_node_results, int) and leaf_node_results == 0:
                     leaf_node_results = output_without_else
                 else:
                     leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
@@ -1430,11 +1437,15 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
 
         acc = 100. * definite_correct / len(data_loader.sampler)
         avg_acc += acc
+
+    model_size = calculate_no_of_params(models)
     avg_acc /= len(test_users)
     avg_mem /= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+        logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
 def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, preferences):
@@ -1757,7 +1768,8 @@ def calculate_no_of_params_sum_each(models):
 def calculate_no_of_params_for_each(models):
     no_of_params = []
     for model in models:
-        no_of_params.append(sum(p.numel() for p in model.parameters()))
+        if not model is None:
+            no_of_params.append(sum(p.numel() for p in model.parameters()))
     return no_of_params
 
 
