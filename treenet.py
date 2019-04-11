@@ -361,6 +361,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
 
     definite_correct = 0
     indefinite_correct = 0
+    new_corrects = 0
     wrong = 0
     avg_loss = 0
     for data, label in test_loader:
@@ -374,6 +375,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         sum_of_losses = 0
         results = [None] * len(models)
         results[0] = models[0](data)
+        concat_results = 0
         for i in range(1, len(models)):
             if not models[i] is None:
                 prev = (i + 1) // 2 - 1
@@ -381,10 +383,24 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     res = models[i](results[prev])
                     results[i] = res
                     pred.append(res.max(1, keepdim=True)[1])
+
+                    output_without_else = torch.stack([i[:-1] for i in res])
+                    if concat_results == 0:
+                        concat_results = output_without_else
+                    else:
+                        concat_results = torch.cat((concat_results, output_without_else), dim=1)
+
                     if not args.fast_train:
                         leaf_node_results.append(res)
                 else:
                     results[i] = models[i](results[prev])
+
+        full_pred = concat_results.max(1, keepdim=True)[1]
+        leaf_labels = [i for sub in leaf_node_labels for i in sub]
+
+        for i in range(len(labels)):
+            if labels[i].item() == leaf_labels[full_pred[i].item()]:
+                new_corrects += 1
 
         if not args.fast_train:
             use_cuda = torch.cuda.is_available()
@@ -432,6 +448,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
+    new_acc = 100. * new_corrects / len(test_loader.sampler)
     if args.val_mode and acc > best_acc:
         best_acc = acc
         for i in range(len(models)):
@@ -450,11 +467,53 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
             100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
             definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
+        logging.info('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
     print('\nTest set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
+    print('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
+
+
+def add_deeper_leaves(check_list, index, leaf_node_index, models):
+    first_child = ((index + 1) * 2) - 1
+    second_child = first_child + 1
+    if len(models) > first_child and models[first_child] is not None:
+        if first_child in leaf_node_index:
+            check_list.append(leaf_node_index.index(first_child))
+        else:
+            add_deeper_leaves(check_list, first_child, leaf_node_index, models)
+    if len(models) > second_child and models[second_child] is not None:
+        if second_child in leaf_node_index:
+            check_list.append(leaf_node_index.index(second_child))
+        else:
+            add_deeper_leaves(check_list, second_child, leaf_node_index, models)
+
+
+def get_order_of_checking_extra_leaf_indices(initial_model_indices, leaf_node_index, models):
+    # list(reversed(initial_model_indices)) = [4,0] -> [13,4]
+    # leaf_node_index = [4,7,11,12,13,14,17,18]
+    # models = [0,1,2,3,4,5,6,7,8,None,None,11,12,13,14,None,None,17,18,?????]
+
+    check_list = []
+    init_labels = [leaf_node_index[i] for i in reversed(initial_model_indices)]
+    for i in init_labels:
+        index = i
+        while index:
+            index = index + 1 if index % 2 == 1 else index - 1      # sibling index
+            if leaf_node_index.index(index) not in initial_model_indices:
+                if leaf_node_index.index(index) not in check_list and index in leaf_node_index:
+                    check_list.append(leaf_node_index.index(index))
+                else:
+                    add_deeper_leaves(check_list, index, leaf_node_index, models)
+            index = (index + 1) // 2 - 1        # parent index
+
+        # Add remaining
+        for j in range(len(leaf_node_index)):
+            if j not in initial_model_indices and j not in check_list:
+                check_list.append(j)
+    return check_list
 
 
 def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data_transform, device, args, cuda_args):
@@ -475,13 +534,13 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         leaf_node_paths.append(path)
 
     avg_acc = 0
+    avg_mem = 0
     for each_user in test_users:
         # Getting the data for each user
         indices = []
         for label in each_user:
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
-        sampler = IndexSampler(indices)
         if args.cifar10:
             data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=data_transform)
         elif args.cifar100:
@@ -490,13 +549,48 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
             valdir = os.path.join('../places365/places365_standard', 'val')
             data = datasets.ImageFolder(valdir, transform=data_transform)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
-                                                  sampler=sampler, **cuda_args)
+                                                  sampler=IndexSampler(indices), **cuda_args)
 
+        if args.cifar10:
+            initialize_models_count = 10
+        elif args.cifar100:
+            initialize_models_count = 50
+        else:
+            initialize_models_count = 100
+        initialized = False
+        initialized_labels = []
+        initial_model_indices = []
+        initial_models_enough_count, all_models_used_count = 0, initialize_models_count
+        extra_used_models = []
+        extra_used_indices = []
         definite_correct = 0
         for data, label in data_loader:
             data, labels = data.to(device), label.to(device)
+
+            if initialized:
+                initialize_models_count = 0 - len(labels)
+            if not initialized:
+                initialize_models_count -= len(labels)
+                if initialize_models_count > 0:
+                    for lbl in labels:
+                        if lbl.item() not in initialized_labels:
+                            initialized_labels.append(lbl.item())
+                else:
+                    for lbl in labels[:initialize_models_count + len(labels)]:
+                        if lbl.item() not in initialized_labels:
+                            initialized_labels.append(lbl.item())
+                    initialized = True
+            if initialized:
+                for lbl in initialized_labels:
+                    for i in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[i]:
+                            if i not in initial_model_indices:
+                                initial_model_indices.append(i)     # leaf node label index, not the model index!
+                            break
+
             pred = []
-            leaf_node_results = []
+            pred_probs = []
+            leaf_node_results = 0
             results = [None] * len(models)
             results[0] = models[0](data)
             for i in range(1, len(models)):
@@ -506,31 +600,150 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                         res = models[i](results[prev])
                         results[i] = res
                         pred.append(res.max(1, keepdim=True)[1])
-                        if not args.fast_train:
-                            leaf_node_results.append(res)
+                        pred_probs.append(res.max(1, keepdim=True)[0])
+                        output_without_else = torch.stack([i[:-1] for i in res])
+                        if leaf_node_results == 0:
+                            leaf_node_results = output_without_else
+                        else:
+                            leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
                     else:
                         results[i] = models[i](results[prev])
+            full_pred = leaf_node_results.max(1, keepdim=True)[1]
+            leaf_labels = [i for sub in leaf_node_labels for i in sub]
 
-            for i in range(labels.size(0)):
-                lbl = labels[i].item()
-                ln_index = -1
-                for j in range(len(leaf_node_labels)):
-                    if lbl in leaf_node_labels[j]:
-                        k = leaf_node_labels[j].index(lbl)
-                        ln_index = (j, k)
-                        break
-                if pred[ln_index[0]][i] == ln_index[1]:
-                    definite = True
-                    for j in range(len(leaf_node_index)):
-                        if j != ln_index[0]:
+            if not initialized:
+                for i in range(labels.size(0)):
+                    lbl = labels[i].item()
+                    ln_index = -1
+                    for j in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+                    if pred[ln_index[0]][i] == ln_index[1]:
+                        definite = True
+                        for j in range(len(leaf_node_index)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                        definite = False
+                        if definite:
+                            definite_correct += 1
+            else:
+                # remaining initial whole model use
+                for i in range(initialize_models_count + len(labels)):
+                    lbl = labels[i].item()
+                    ln_index = -1
+                    for j in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+                    if pred[ln_index[0]][i] == ln_index[1]:
+                        definite = True
+                        for j in range(len(leaf_node_index)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                        definite = False
+                        if definite:
+                            definite_correct += 1
+
+                # first try with initial models, then use all models if necessary
+                for i in range(initialize_models_count + len(labels), len(labels)):
+                    lbl = labels[i].item()
+                    ln_index = -1
+                    for j in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+
+                    # check if initial models are enough for storage calculation purposes only
+                    for j in initial_model_indices:
+                        # if any prediction is made other than 'else', we count as 'initial models enough'
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            initial_models_enough_count += 1
+                            break
+
+                    check_list = get_order_of_checking_extra_leaf_indices(initial_model_indices, leaf_node_index, models)
+
+                    correct = True
+                    found = False
+                    for j in initial_model_indices:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            found = True
+                            if j == ln_index[0] and pred[j][i] != ln_index[1]:
+                                break
+                            else:
+                                if lbl in initialized_labels:
+                                    if pred[ln_index[0]][i] != len(leaf_node_labels[j]):
+                                        if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                            correct = False
+                                            break
+                                    else:
+                                        correct = False
+                                        break
+                                else:
+                                    correct = False
+                                    break
+                    if not found:
+                        for j in check_list:
+                            extra_used_indices.append(j)
                             if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
-                    if definite:
+                                found = True
+                                if j == ln_index[0] and pred[j][i] != ln_index[1]:
+                                    break
+                                else:
+                                    correct = False
+                                    break
+                    # means every leaf output is 'else'
+                    if not found:
+                        if lbl != leaf_labels[full_pred[i].item()]:
+                            correct = False
+
+                    if len(extra_used_indices):
+                        extra_used_models.append(extra_used_indices)
+                        extra_used_indices = []
+                    if correct:
                         definite_correct += 1
+
+        if initial_models_enough_count + all_models_used_count + len(extra_used_models) == len(data_loader.sampler):
+            print("Storage Calculation Check Success!")
+        else:
+            print("Storage Calculation Check Failed!")
+
+        no_of_params = calculate_no_of_params_for_each(models)
+
+        initial_indices = [0]
+        for i in initial_model_indices:
+            path = leaf_node_paths[i]
+            for j in path:
+                if j not in initial_indices:
+                    initial_indices.append(j)
+        initial_storage = 0
+        for i in initial_indices:
+            initial_storage += no_of_params[i]
+
+        extra_storage = 0
+        for i in range(len(extra_used_models)):
+            extra_storage += initial_storage
+            extra_indices = [0]
+            for j in extra_used_models[i]:
+                path = leaf_node_paths[extra_used_models[i][j]]
+                for k in path:
+                    if k not in extra_indices:
+                        extra_indices.append(k)
+            for j in extra_indices:
+                extra_storage += no_of_params[j]
+
+        storage = (all_models_used_count * sum(no_of_params)) + (initial_storage * initial_models_enough_count) + extra_storage
 
         acc = 100. * definite_correct / len(data_loader.sampler)
         avg_acc += acc
+        avg_mem += storage
     avg_acc /= len(test_users)
+    avg_mem /= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
@@ -771,7 +984,7 @@ def test_net(model, test_loader, device, args, epoch=0, save_name="net"):
         test_loss, correct, len(test_loader.sampler), acc))
 
 
-def test_net_scenario(model, test_users, class_indices, data, device, args, cuda_args):
+def test_net_scenario(model, test_users, class_indices, data_transform, device, args, cuda_args):
     model.eval()
     loss = torch.nn.CrossEntropyLoss()
     loss.to(device)
@@ -783,6 +996,14 @@ def test_net_scenario(model, test_users, class_indices, data, device, args, cuda
         for label in each_user:
             i = class_indices[label][randint(0, len(class_indices[label])-1)]
             indices.append(i)
+
+        if args.cifar10:
+            data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=data_transform)
+        elif args.cifar100:
+            data = datasets.CIFAR100("../data/CIFAR100", train=False, transform=data_transform)
+        else:
+            valdir = os.path.join('../places365/places365_standard', 'val')
+            data = datasets.ImageFolder(valdir, transform=data_transform)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
                                                  sampler=IndexSampler(indices), **cuda_args)
         # Testing the data for each user
@@ -937,6 +1158,7 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
 
     definite_correct = 0
     indefinite_correct = 0
+    new_corrects = 0
     wrong = 0
     avg_loss = 0
     for data, label in test_loader:
@@ -948,11 +1170,26 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
         losses_to_print = []
         sum_of_losses = 0
         leaf_node_results = []
+        concat_results = 0
         for i in range(len(models)):
             output = models[i](data)
             pred.append(output.max(1, keepdim=True)[1])
+
+            output_without_else = torch.stack([i[:-1] for i in output])
+            if concat_results == 0:
+                concat_results = output_without_else
+            else:
+                concat_results = torch.cat((concat_results, output_without_else), dim=1)
+
             if not args.fast_train:
                 leaf_node_results.append(output)
+
+        full_pred = concat_results.max(1, keepdim=True)[1]
+        leaf_labels = [i for sub in leaf_node_labels for i in sub]
+
+        for i in range(len(labels)):
+            if labels[i] == leaf_labels[full_pred[i].item()]:
+                new_corrects += 1
 
         if not args.fast_train:
             use_cuda = torch.cuda.is_available()
@@ -1000,6 +1237,7 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
                 wrong += 1
 
     acc = 100. * definite_correct / len(test_loader.sampler)
+    new_acc = 100. * new_corrects / len(test_loader.sampler)
     if args.val_mode and acc > best_acc:
         best_acc = acc
         for i in range(len(models)):
@@ -1016,68 +1254,184 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
+        logging.info('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
     print('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
+    print('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
 
 
-def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, data, device, args, cuda_args):
+def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, data_transform, device, args, cuda_args):
     for model in models:
         model.eval()
 
     avg_acc = 0
+    avg_mem = 0
     for each_user in test_users:
         # Getting the data for each user
         indices = []
         for label in each_user:
             i = class_indices[label][randint(0, len(class_indices[label]) - 1)]
             indices.append(i)
+        if args.cifar10:
+            data = datasets.CIFAR10("../data/CIFAR10", train=False, transform=data_transform)
+        elif args.cifar100:
+            data = datasets.CIFAR100("../data/CIFAR100", train=False, transform=data_transform)
+        else:
+            valdir = os.path.join('../places365/places365_standard', 'val')
+            data = datasets.ImageFolder(valdir, transform=data_transform)
         data_loader = torch.utils.data.DataLoader(data, batch_size=args.test_batch_size,
                                                   sampler=IndexSampler(indices), **cuda_args)
 
-        initialize_models_count = 50
+        if args.cifar10:
+            initialize_models_count = 10
+        elif args.cifar100:
+            initialize_models_count = 50
+        else:
+            initialize_models_count = 100
         initialized = False
         initialized_labels = []
+        initial_model_indices = []
+        initial_models_enough_count, all_models_used_count = 0, initialize_models_count
         definite_correct = 0
         for data, label in data_loader:
             data, labels = data.to(device), label.to(device)
 
-            initialize_models_count -= len(labels)
-            if not initialized and initialize_models_count < 0:
-                for lbl in labels:
-                    if lbl.item() not in initialized_labels:
-                        initialized_labels.append(lbl.item())
-                initialized = True
+            if initialized:
+                initialize_models_count = 0 - len(labels)
+            if not initialized:
+                initialize_models_count -= len(labels)
+                if initialize_models_count > 0:
+                    for lbl in labels:
+                        if lbl.item() not in initialized_labels:
+                            initialized_labels.append(lbl.item())
+                else:
+                    for lbl in labels[:initialize_models_count + len(labels)]:
+                        if lbl.item() not in initialized_labels:
+                            initialized_labels.append(lbl.item())
+                    initialized = True
+            if initialized:
+                for lbl in initialized_labels:
+                    for i in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[i]:
+                            if i not in initial_model_indices:
+                                initial_model_indices.append(i)
+                            break
 
             pred = []
-            leaf_node_results = []
+            pred_probs = []
+            leaf_node_results = 0
             for i in range(len(models)):
                 output = models[i](data)
                 pred.append(output.max(1, keepdim=True)[1])
-                if not args.fast_train:
-                    leaf_node_results.append(output)
+                pred_probs.append(output.max(1, keepdim=True)[0])
+                output_without_else = torch.stack([i[:-1] for i in output])
+                if leaf_node_results == 0:
+                    leaf_node_results = output_without_else
+                else:
+                    leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
+            full_pred = leaf_node_results.max(1, keepdim=True)[1]
+            leaf_labels = [i for sub in leaf_node_labels for i in sub]     # Unite leaf labels in a list
 
-            for i in range(len(labels)):
-                lbl = labels[i].item()
-                ln_index = -1
-                for j in range(len(leaf_node_labels)):
-                    if lbl in leaf_node_labels[j]:
-                        k = leaf_node_labels[j].index(lbl)
-                        ln_index = (j, k)
-                        break
-                if pred[ln_index[0]][i] == ln_index[1]:
-                    definite = True
+            if not initialized:
+                for i in range(len(labels)):
+                    lbl = labels[i].item()
+                    ln_index = -1
                     for j in range(len(leaf_node_labels)):
-                        if j != ln_index[0]:
-                            if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
-                    if definite:
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+                    if pred[ln_index[0]][i] == ln_index[1]:
+                        definite = True
+                        for j in range(len(leaf_node_labels)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                        definite = False
+                        if definite:
+                            definite_correct += 1
+            else:
+                # remaining initial whole model use
+                for i in range(initialize_models_count + len(labels)):
+                    lbl = labels[i].item()
+                    ln_index = -1
+                    for j in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+                    if pred[ln_index[0]][i] == ln_index[1]:
+                        definite = True
+                        for j in range(len(leaf_node_labels)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                        definite = False
+                        if definite:
+                            definite_correct += 1
+
+                # first try with initial models, then use all models if necessary
+                for i in range(initialize_models_count + len(labels), len(labels)):
+                    lbl = labels[i].item()
+                    ln_index = -1
+                    for j in range(len(leaf_node_labels)):
+                        if lbl in leaf_node_labels[j]:
+                            k = leaf_node_labels[j].index(lbl)
+                            ln_index = (j, k)
+                            break
+
+                    # Just for Storage Calculation
+                    all_models_used_count += 1
+                    for j in initial_model_indices:
+                        # if any prediction is made other than 'else', we count as 'initial models enough'
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            initial_models_enough_count += 1
+                            all_models_used_count -= 1
+                            break
+
+                    correct = True
+                    if lbl in initialized_labels:
+                        for j in initial_model_indices:
+                            if j == ln_index[0]:
+                                if pred[j][i] != ln_index[1]:
+                                    correct = False
+                                    break
+                            else:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                        correct = False
+                                        break
+                    else:
+                        if pred[ln_index[0]][i] != ln_index[1]:
+                            correct = False
+                        else:
+                            for j in range(len(leaf_node_labels)):
+                                if j != ln_index[0]:
+                                    if pred[j][i] != len(leaf_node_labels[j]):
+                                        if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                            correct = False
+                                            break
+                    if correct:
                         definite_correct += 1
+        if len(each_user) == initial_models_enough_count + all_models_used_count:
+            print("Storage Calculation Check Success!")
+            no_of_params = calculate_no_of_params_for_each(models)
+            in_size, rem_size = 0, sum(no_of_params)
+            for i in initial_model_indices:
+                in_size += no_of_params[i]
+            storage = ((in_size * initial_models_enough_count) + (rem_size * all_models_used_count)) / len(each_user)
+        else:
+            print("Storage Calculation Check Failed!")
+            storage = 0
+        avg_mem += storage
+
         acc = 100. * definite_correct / len(data_loader.sampler)
         avg_acc += acc
     avg_acc /= len(test_users)
+    avg_mem /= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
@@ -1390,6 +1744,21 @@ def load_class_indices(data, no_classes, train_or_val, classes=None):
                 for i in range(len(classes)):
                     indices += all_indices[classes[i]]
     return indices
+
+
+def calculate_no_of_params_sum_each(models):
+    length = 0
+    for model in models:
+        if not model is None:
+            length += sum(p.numel() for p in model.parameters())
+    return length
+
+
+def calculate_no_of_params_for_each(models):
+    no_of_params = []
+    for model in models:
+        no_of_params.append(sum(p.numel() for p in model.parameters()))
+    return no_of_params
 
 
 def calculate_no_of_params(models):
@@ -1824,12 +2193,7 @@ def main():
                 all_prefs = pref_table_to_all_prefs(preference_table.T)
                 test_net_all_preferences(model, val_loader, device, args, all_prefs)
             if args.test_scenario:
-                if args.cifar10:
-                    test_net_scenario(model, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
-                elif args.cifar100:
-                    test_net_scenario(model, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
-                else:
-                    test_net_scenario(model, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
+                test_net_scenario(model, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
     elif args.mobile_tree_net:
         print("Mobile Tree Net")
         # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
@@ -2204,12 +2568,7 @@ def main():
                 test_parallel_net(models, leaf_node_labels, val_loader, device, args)
                 test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
             if args.test_scenario:
-                if args.cifar10:
-                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_testing_data, device, args, cuda_args)
-                elif args.cifar100:
-                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, cifar_100_testing_data, device, args, cuda_args)
-                else:
-                    test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, places_validation_data, device, args, cuda_args)
+                test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
 
     if args.log:
         end_time = time.time()
