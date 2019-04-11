@@ -534,6 +534,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         leaf_node_paths.append(path)
 
     avg_acc = 0
+    avg_new_acc = 0
     avg_mem = 0
     storage_check = True
     for each_user in test_users:
@@ -565,6 +566,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         extra_used_models = []
         extra_used_indices = []
         definite_correct = 0
+        new_corrects = 0
         for data, label in data_loader:
             data, labels = data.to(device), label.to(device)
 
@@ -611,6 +613,10 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                         results[i] = models[i](results[prev])
             full_pred = leaf_node_results.max(1, keepdim=True)[1]
             leaf_labels = [i for sub in leaf_node_labels for i in sub]
+
+            for i in range(len(labels)):
+                if labels[i].item() == leaf_labels[full_pred[i].item()]:
+                    new_corrects += 1
 
             if not initialized:
                 for i in range(labels.size(0)):
@@ -739,7 +745,9 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         storage = ((all_models_used_count * sum(no_of_params)) + (initial_storage * initial_models_enough_count) + extra_storage) / len(each_user)
 
         acc = 100. * definite_correct / len(data_loader.sampler)
+        new_acc = 100. * new_corrects / len(data_loader.sampler)
         avg_acc += acc
+        avg_new_acc += new_acc
         avg_mem += storage
 
     model_size = calculate_no_of_params(models)
@@ -748,11 +756,14 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
     else:
         print("Storage Calculation Check Failed!")
     avg_acc /= len(test_users)
+    avg_new_acc /= len(test_users)
     avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+        logging.info('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
@@ -1275,7 +1286,9 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
         model.eval()
 
     avg_acc = 0
+    avg_new_acc = 0
     avg_mem = 0
+    storage_check = True
     for each_user in test_users:
         # Getting the data for each user
         indices = []
@@ -1303,6 +1316,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
         initial_model_indices = []
         initial_models_enough_count, all_models_used_count = 0, initialize_models_count
         definite_correct = 0
+        new_corrects = 0
         for data, label in data_loader:
             data, labels = data.to(device), label.to(device)
 
@@ -1341,6 +1355,10 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                     leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
             full_pred = leaf_node_results.max(1, keepdim=True)[1]
             leaf_labels = [i for sub in leaf_node_labels for i in sub]     # Unite leaf labels in a list
+
+            for i in range(len(labels)):
+                if labels[i].item() == leaf_labels[full_pred[i].item()]:
+                    new_corrects += 1
 
             if not initialized:
                 for i in range(len(labels)):
@@ -1423,28 +1441,36 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                                             break
                     if correct:
                         definite_correct += 1
-        if len(each_user) == initial_models_enough_count + all_models_used_count:
-            print("Storage Calculation Check Success!")
-            no_of_params = calculate_no_of_params_for_each(models)
-            in_size, rem_size = 0, sum(no_of_params)
-            for i in initial_model_indices:
-                in_size += no_of_params[i]
-            storage = ((in_size * initial_models_enough_count) + (rem_size * all_models_used_count)) / len(each_user)
-        else:
-            print("Storage Calculation Check Failed!")
-            storage = 0
+        if initial_models_enough_count + all_models_used_count != len(each_user):
+            storage_check = False
+
+        no_of_params = calculate_no_of_params_for_each(models)
+        in_size, rem_size = 0, sum(no_of_params)
+        for i in initial_model_indices:
+            in_size += no_of_params[i]
+        storage = ((in_size * initial_models_enough_count) + (rem_size * all_models_used_count)) / len(each_user)
+
         avg_mem += storage
 
         acc = 100. * definite_correct / len(data_loader.sampler)
+        new_acc = 100. * new_corrects / len(data_loader.sampler)
         avg_acc += acc
+        avg_new_acc += new_acc
 
+    if storage_check:
+        print("Storage Calculation Check Success!")
+    else:
+        print("Storage Calculation Check Failed!")
     model_size = calculate_no_of_params(models)
     avg_acc /= len(test_users)
+    avg_new_acc /= len(test_users)
     avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+        logging.info('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
+    print('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
@@ -1980,11 +2006,11 @@ def getArgs():
     parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
-    parser.add_argument('-sr', '--root-step', type=int, default=1, help='number of root steps')
+    parser.add_argument('-sr', '--root-step', type=int, default=3, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
-    parser.add_argument('-df', '--div-factor', type=int, default=2, help='dividing factor in networks')
-    parser.add_argument('-ds', '--div-step', type=int, default=2, help='dividing factor in networks')
+    parser.add_argument('-df', '--div-factor', type=float, default=1.4142, help='dividing factor in networks')
+    parser.add_argument('-ds', '--div-step', type=int, default=1, help='dividing factor in networks')
     parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
     parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
     parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
