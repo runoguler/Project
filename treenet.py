@@ -1549,7 +1549,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
         extra_storage = 0
         for i in range(len(extra_used_models)):
             extra_storage += in_size
-            for j in range(len(extra_used_models[i])):
+            for j in extra_used_models[i]:
                 extra_storage += no_of_params[j]
 
         storage = ((in_size * initial_models_enough_count) + (rem_size * all_models_used_count) + extra_storage) / len(each_user)
