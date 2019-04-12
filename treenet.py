@@ -435,6 +435,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     k = leaf_node_labels[j].index(lbl)
                     ln_index = (j, k)
                     break
+
             if pred[ln_index[0]][i] == ln_index[1]:
                 definite = True
                 for j in range(len(leaf_node_index)):
@@ -446,6 +447,19 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     definite_correct += 1
                 else:
                     indefinite_correct += 1
+            elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                all_else = True
+                for j in range(len(leaf_node_index)):
+                    if j != ln_index[0]:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            all_else = False
+                            wrong += 1
+                            break
+                if all_else:
+                    if lbl == leaf_labels[full_pred[i].item()]:
+                        definite_correct += 1
+                    else:
+                        wrong += 1
             else:
                 wrong += 1
 
