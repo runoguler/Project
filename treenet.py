@@ -1538,7 +1538,7 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                         extra_used_indices = []
                     if correct:
                         definite_correct += 1
-        if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(each_user):
+        if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(data_loader.sampler):
             storage_check = False
 
         no_of_params = calculate_no_of_params_for_each(models)

@@ -133,6 +133,7 @@ def binarify_2d(arr):
 def generate_hierarchy_trials(classes, n_type=10, load=False):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
+        print("User Types Load Successful!")
     else:
         num_pref = np.random.randint(2, 4, n_type)
         user_types = np.empty((0, classes), dtype=int)
@@ -176,6 +177,7 @@ def generate_hierarchy_trials(classes, n_type=10, load=False):
 def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
+        print("User Types Load Successful!")
     else:
         num_pref = np.random.randint(2, 4, n_type)
         user_types = np.empty((0, classes), dtype=int)
@@ -208,6 +210,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
 # if there is a memory problem with this function, use generate_users_memoryless() instead
 def generate_users(num_users, num_samples, load=False):
     if load and os.path.isfile('test_scenario_users.npy'):
+        print("Test Scenario Users Load Successful!")
         return np.load('test_scenario_users.npy')
     user_types = np.load('user_types.npy')
     test_user_types = np.random.randint(len(user_types), size=num_users)
