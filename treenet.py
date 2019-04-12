@@ -702,48 +702,47 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                             ln_index = (j, k)
                             break
 
-                    # check if initial models are enough for storage calculation purposes only
-                    for j in initial_model_indices:
-                        # if any prediction is made other than 'else', we count as 'initial models enough'
-                        if pred[j][i] != len(leaf_node_labels[j]):
-                            initial_models_enough_count += 1
-                            break
-
                     check_list = get_order_of_checking_extra_leaf_indices(initial_model_indices, leaf_node_index, models)
 
                     correct = True
                     found = False
+                    last_prob = 0
                     for j in initial_model_indices:
                         if pred[j][i] != len(leaf_node_labels[j]):
-                            found = True
-                            if j == ln_index[0] and pred[j][i] != ln_index[1]:
-                                break
+                            if not found:
+                                last_prob = pred_probs[j][i]
+                                found = True
+                                initial_models_enough_count += 1
                             else:
-                                if lbl in initialized_labels:
-                                    if pred[ln_index[0]][i] != len(leaf_node_labels[j]):
-                                        if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
-                                            correct = False
-                                            break
-                                    else:
-                                        correct = False
-                                        break
+                                if pred_probs[j][i] < last_prob:
+                                    continue
+                            if j == ln_index[0]:
+                                if pred[j][i] == ln_index[1]:
+                                    correct = True
                                 else:
                                     correct = False
-                                    break
+                            else:
+                                correct = False
                     if not found:
-                        if len(initial_model_indices) == len(leaf_node_labels):
-                            initial_models_enough_count += 1
+                        # Check other models in decreasing order
+                        if args.scenario_use_full_model:
+                            all_models_used_count += 1
+                            if lbl != leaf_labels[full_pred[i].item()]:
+                                found = True
+                                correct = False
                         else:
-                            for j in check_list:
-                                extra_used_indices.append(j)
-                                if pred[j][i] != len(leaf_node_labels[j]):
-                                    found = True
-                                    if j == ln_index[0] and pred[j][i] != ln_index[1]:
-                                        break
-                                    else:
-                                        correct = False
-                                        break
-                    # means every leaf output is 'else'
+                            if len(initial_model_indices) == len(leaf_node_labels):
+                                initial_models_enough_count += 1
+                            else:
+                                for j in check_list:
+                                    extra_used_indices.append(j)
+                                    if pred[j][i] != len(leaf_node_labels[j]):
+                                        found = True
+                                        if j == ln_index[0]:
+                                            if pred[j][i] != ln_index[1]:
+                                                correct = False
+                                        else:
+                                            correct = False
                     if not found:
                         if lbl != leaf_labels[full_pred[i].item()]:
                             correct = False
