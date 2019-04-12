@@ -731,15 +731,18 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                                     correct = False
                                     break
                     if not found:
-                        for j in check_list:
-                            extra_used_indices.append(j)
-                            if pred[j][i] != len(leaf_node_labels[j]):
-                                found = True
-                                if j == ln_index[0] and pred[j][i] != ln_index[1]:
-                                    break
-                                else:
-                                    correct = False
-                                    break
+                        if len(initial_model_indices) == len(leaf_node_labels):
+                            initial_models_enough_count += 1
+                        else:
+                            for j in check_list:
+                                extra_used_indices.append(j)
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    found = True
+                                    if j == ln_index[0] and pred[j][i] != ln_index[1]:
+                                        break
+                                    else:
+                                        correct = False
+                                        break
                     # means every leaf output is 'else'
                     if not found:
                         if lbl != leaf_labels[full_pred[i].item()]:
@@ -1519,16 +1522,19 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                                 found = True
                                 correct = False
                         else:
-                            for j in reversed(range(len(leaf_node_labels))):
-                                if j not in initial_model_indices:
-                                    extra_used_indices.append(j)
-                                    if pred[j][i] != len(leaf_node_labels[j]):
-                                        found = True
-                                        if j == ln_index[0]:
-                                            if pred[j][i] != ln_index[1]:
+                            if len(initial_model_indices) == len(leaf_node_labels):
+                                initial_models_enough_count += 1
+                            else:
+                                for j in reversed(range(len(leaf_node_labels))):
+                                    if j not in initial_model_indices:
+                                        extra_used_indices.append(j)
+                                        if pred[j][i] != len(leaf_node_labels[j]):
+                                            found = True
+                                            if j == ln_index[0]:
+                                                if pred[j][i] != ln_index[1]:
+                                                    correct = False
+                                            else:
                                                 correct = False
-                                        else:
-                                            correct = False
                     if not found:
                         if lbl != leaf_labels[full_pred[i].item()]:
                             correct = False
@@ -1540,6 +1546,8 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                         definite_correct += 1
         if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(data_loader.sampler):
             storage_check = False
+            print(initial_models_enough_count + all_models_used_count + len(extra_used_models))
+            print(data_loader.sampler)
 
         no_of_params = calculate_no_of_params_for_each(models)
         in_size, rem_size = 0, sum(no_of_params)
