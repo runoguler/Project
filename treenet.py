@@ -652,6 +652,16 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                                         definite = False
                         if definite:
                             definite_correct += 1
+                    elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                        all_else = True
+                        for j in range(len(leaf_node_index)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    all_else = False
+                                    break
+                        if all_else:
+                            if lbl == leaf_labels[full_pred[i].item()]:
+                                definite_correct += 1
             else:
                 # remaining initial whole model use
                 for i in range(initialize_models_count + len(labels)):
@@ -671,6 +681,16 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                                         definite = False
                         if definite:
                             definite_correct += 1
+                    elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                        all_else = True
+                        for j in range(len(leaf_node_index)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    all_else = False
+                                    break
+                        if all_else:
+                            if lbl == leaf_labels[full_pred[i].item()]:
+                                definite_correct += 1
 
                 # first try with initial models, then use all models if necessary
                 for i in range(initialize_models_count + len(labels), len(labels)):
@@ -1409,6 +1429,16 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                                         definite = False
                         if definite:
                             definite_correct += 1
+                    elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                        all_else = True
+                        for j in range(len(leaf_node_labels)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    all_else = False
+                                    break
+                        if all_else:
+                            if lbl == leaf_labels[full_pred[i].item()]:
+                                definite_correct += 1
             else:
                 # remaining initial whole model use
                 for i in range(initialize_models_count + len(labels)):
@@ -1428,6 +1458,16 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                                         definite = False
                         if definite:
                             definite_correct += 1
+                    elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                        all_else = True
+                        for j in range(len(leaf_node_labels)):
+                            if j != ln_index[0]:
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    all_else = False
+                                    break
+                        if all_else:
+                            if lbl == leaf_labels[full_pred[i].item()]:
+                                definite_correct += 1
 
                 # first try with initial models, then use all models if necessary
                 for i in range(initialize_models_count + len(labels), len(labels)):
@@ -1449,6 +1489,43 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                             break
 
                     correct = True
+                    found = False
+                    last_prob = 0
+                    for j in initial_model_indices:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            if not found:
+                                last_prob = pred_probs[j][i]
+                                found = True
+                            else:
+                                if pred_probs[j][i] < last_prob:
+                                    continue
+                            if j == ln_index[0]:
+                                if pred[j][i] == ln_index[1]:
+                                    correct = True
+                                else:
+                                    correct = False
+                            else:
+                                correct = False
+                    if not found:
+                        # Check other models in decreasing order
+                        if args.scenario_use_full_model:
+                            if lbl != leaf_labels[full_pred[i].item()]:
+                                found = True
+                                correct = False
+                        else:
+                            for j in reversed(range(len(leaf_node_labels))):
+                                if pred[j][i] != len(leaf_node_labels[j]):
+                                    found = True
+                                    if j == ln_index[0]:
+                                        if pred[j][i] != ln_index[1]:
+                                            correct = False
+                                    else:
+                                        correct = False
+                    if not found:
+                        if lbl != leaf_labels[full_pred[i].item()]:
+                            correct = False
+
+                    '''
                     if lbl in initialized_labels:
                         for j in initial_model_indices:
                             if j == ln_index[0]:
@@ -1470,6 +1547,8 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                                         if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
                                             correct = False
                                             break
+                    '''
+
                     if correct:
                         definite_correct += 1
         if initial_models_enough_count + all_models_used_count != len(each_user):
@@ -2033,6 +2112,7 @@ def getArgs():
     parser.add_argument('-nsu', '--num-scenario-users', type=int, default=100, help='number of scenario test users')
     parser.add_argument('-lsu', '--load-scenario-users', action='store_true', help='number of scenario test users')
     parser.add_argument('-nsd', '--scenario-data-length', type=int, default=1000, help='number of test images per scenario test users')
+    parser.add_argument('-sufm', '--scenario-use-full-model', action='store_true', help='use full model in a miss situation')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
