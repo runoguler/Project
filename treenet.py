@@ -370,6 +370,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
             labels = map_labels(labels).to(device)
 
         pred = []
+        pred_probs = []
         losses_to_print = []
         leaf_node_results = []
         sum_of_losses = 0
@@ -383,7 +384,7 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                     res = models[i](results[prev])
                     results[i] = res
                     pred.append(res.max(1, keepdim=True)[1])
-
+                    pred_probs.append(res.max(1, keepdim=True)[0])
                     output_without_else = torch.stack([i[:-1] for i in res])
                     if isinstance(concat_results, int) and concat_results == 0:
                         concat_results = output_without_else
@@ -439,7 +440,8 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
                 for j in range(len(leaf_node_index)):
                     if j != ln_index[0]:
                         if pred[j][i] != len(leaf_node_labels[j]):
-                            definite = False
+                            if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                definite = False
                 if definite:
                     definite_correct += 1
                 else:
@@ -1185,6 +1187,7 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
             labels = map_labels(labels).to(device)
 
         pred = []
+        pred_probs = []
         losses_to_print = []
         sum_of_losses = 0
         leaf_node_results = []
@@ -1192,7 +1195,7 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
         for i in range(len(models)):
             output = models[i](data)
             pred.append(output.max(1, keepdim=True)[1])
-
+            pred_probs.append(output.max(1, keepdim=True)[0])
             output_without_else = torch.stack([i[:-1] for i in output])
             if isinstance(concat_results, int) and concat_results == 0:
                 concat_results = output_without_else
@@ -1246,7 +1249,8 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
                 for j in range(len(leaf_node_labels)):
                     if j != ln_index[0]:
                         if pred[j][i] != len(leaf_node_labels[j]):
-                            definite = False
+                            if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                definite = False
                 if definite:
                     definite_correct += 1
                 else:
