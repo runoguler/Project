@@ -2257,7 +2257,8 @@ def main():
             val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
                                                        sampler=SubsetRandomSampler(val_indices), **cuda_args)
 
-    root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
+    # root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
+    root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=False, load_gen_users=True)
     if args.test_scenario:
         test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
                                                    load=args.load_scenario_users)

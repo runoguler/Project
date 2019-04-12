@@ -130,7 +130,7 @@ def binarify_2d(arr):
     return arr
 
 
-def generate_hierarchy_trials(classes, n_type=10, load=False):
+def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
@@ -145,18 +145,41 @@ def generate_hierarchy_trials(classes, n_type=10, load=False):
             user_types = np.vstack((user_types, u_type))
         np.save('user_types', user_types)
 
-    print(user_types)
-    user_types = binarify_2d(user_types)
+    # print(user_types)
 
-    co_mat = user_types.T.dot(user_types)
-    print(co_mat)
+    if not with_distribution:
+        if load and load_gen_users and os.path.isfile('tree_gen_users.npy'):
+            all_users = np.load('tree_gen_users.npy')
+            print("Generating Tree Users Load Successful!")
+        else:
+            no_of_users_for_each_type = 20
+            sample_for_each_user = 100
+            all_users = []
+            for user_type in user_types:
+                for _ in range(no_of_users_for_each_type):
+                    temp = [0] * 10
+                    sample = np.random.choice(len(user_type), sample_for_each_user, p=np.random.dirichlet(user_type, 1)[0])
+                    for i in sample:
+                        temp[i] += 1
+                    all_users.append(temp)
+            all_users = np.array(all_users, dtype=int)
+            np.save('tree_gen_users', all_users)
+        co_mat = all_users.T.dot(all_users)
+    else:
+        user_types = binarify_2d(user_types)
+        co_mat = user_types.T.dot(user_types)
     np.fill_diagonal(co_mat, 0)
+    # print(co_mat)
+
     dist = 1 - co_mat/co_mat.max()
-    print(dist)
+    # print(dist)
+
     i, j = np.triu_indices(dist.shape[0], k=1)
     p_dist = dist[i, j]
     Q = linkage(p_dist, 'ward', 'precomputed')
-    dendrogram(Q)
+
+    # dendrogram(Q)
+    # plt.show()
 
     '''
     num_users_for_each_type = 10
@@ -169,7 +192,6 @@ def generate_hierarchy_trials(classes, n_type=10, load=False):
     print(user_types)
     '''
 
-    plt.show()
     RootNode = linkage_to_tree(Q, classes)
     return RootNode
 
@@ -203,6 +225,10 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
     dendrogram(Z, ax=axes[3])
     plt.show()
     '''
+    # print(user_types)
+    # dendrogram(Z)
+    # plt.show()
+
     RootNode = linkage_to_tree(Z, classes)
     return RootNode
 
@@ -288,8 +314,8 @@ def main():
     classes = 10
     samples = 200
 
-    #root = generate_hierarchy_trials(classes, n_type=20, load=False)
-    root = generate_hierarchy_from_type_distribution(classes, n_type=20, load=False)
+    root = generate_hierarchy_with_cooccurrence(classes, n_type=5, load=True)
+    #root = generate_hierarchy_from_type_distribution(classes, n_type=10, load=True)
     print(root)
     print(generate_users(10, 20, load=False))
     exit()
