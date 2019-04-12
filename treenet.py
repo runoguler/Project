@@ -2116,6 +2116,7 @@ def getArgs():
     parser.add_argument('-sufm', '--scenario-use-full-model', action='store_true', help='use full model in a miss situation')
     parser.add_argument('-ghfd', '--gen-from-dist', action='store_true', help='generate hierarchy from distribution instead of generated users')
     parser.add_argument('-ghnu', '--gen-from-new-users', action='store_false', help='do not load already generated users for generating hierarchy')
+    parser.add_argument('-ghom', '--old-gen-method', action='store_false', help='generate hierarchy with the old method')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
@@ -2259,8 +2260,11 @@ def main():
             val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
                                                        sampler=SubsetRandomSampler(val_indices), **cuda_args)
 
-    # root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
-    root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users)
+    if args.old_gen_method:
+        print("Old Generating Method!")
+        root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
+    else:
+        root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users)
     if args.test_scenario:
         test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
                                                    load=args.load_scenario_users)
