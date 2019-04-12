@@ -2116,7 +2116,7 @@ def getArgs():
     parser.add_argument('-sufm', '--scenario-use-full-model', action='store_true', help='use full model in a miss situation')
     parser.add_argument('-ghfd', '--gen-from-dist', action='store_true', help='generate hierarchy from distribution instead of generated users')
     parser.add_argument('-ghnu', '--gen-from-new-users', action='store_false', help='do not load already generated users for generating hierarchy')
-    parser.add_argument('-ghom', '--old-gen-method', action='store_false', help='generate hierarchy with the old method')
+    parser.add_argument('-ghom', '--old-gen-method', action='store_true', help='generate hierarchy with the old method')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
     parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
@@ -2494,6 +2494,7 @@ def main():
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
+        print(leaf_node_labels)
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net Old") if modelno == 1 else logging.info("VGG Tree Net")
             if fine_tune:
@@ -2629,6 +2630,7 @@ def main():
             cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
         # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
+        print(leaf_node_labels)
         for i in range(0, len(cfg), args.div_step):
             if isinstance(cfg[i], int):
                 cfg[i] = int(cfg[i] // args.div_factor)

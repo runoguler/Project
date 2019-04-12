@@ -143,6 +143,7 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
             for j in preffed:
                 u_type[j] = 200
             user_types = np.vstack((user_types, u_type))
+        print(user_types)
         np.save('user_types', user_types)
 
     # print(user_types)
@@ -209,6 +210,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
             for j in preffed:
                 u_type[j] = 200
             user_types = np.vstack((user_types, u_type))
+        print(user_types)
         np.save('user_types', user_types)
     Z = linkage(user_types.T, 'ward')
     '''
