@@ -188,6 +188,8 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             labels = map_labels(labels).to(device)
 
         pred = []
+        pred_probs = []
+        concat_results = 0
         losses_to_print = []
         for i in range(len(leaf_node_paths)):
             optims[i].zero_grad()
@@ -207,6 +209,12 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
             result = models[k](layer)
             if not args.fast_train:
                 pred.append(result.max(1, keepdim=True)[1])
+                pred_probs.append(result.max(1, keepdim=True)[0])
+                output_without_else = torch.stack([i[:-1] for i in result])
+                if isinstance(concat_results, int) and concat_results == 0:
+                    concat_results = output_without_else
+                else:
+                    concat_results = torch.cat((concat_results, output_without_else), dim=1)
 
             l = losses[i](result, lbls)
             l.backward(retain_graph=True)
@@ -216,6 +224,8 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
         avg_loss += (sum(losses_to_print) / float(len(losses_to_print)))
 
         if not args.fast_train:
+            full_pred = concat_results.max(1, keepdim=True)[1]
+            leaf_labels = [i for sub in leaf_node_labels for i in sub]
             for i in range(labels.size(0)):
                 lbl = labels[i].item()
                 ln_index = -1
@@ -229,9 +239,20 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                     for j in range(len(leaf_node_index)):
                         if j != ln_index[0]:
                             if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
+                                if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                    definite = False
                     if definite:
                         definite_correct += 1
+                elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                    all_else = True
+                    for j in range(len(leaf_node_index)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                all_else = False
+                                break
+                    if all_else:
+                        if lbl == leaf_labels[full_pred[i].item()]:
+                            definite_correct += 1
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
@@ -1142,11 +1163,19 @@ def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, ar
 
         lss_list = []
         pred = []
+        pred_probs = []
+        leaf_node_results = 0
         for i in range(len(models)):
             optims[i].zero_grad()
             output = models[i](data)
             if not args.fast_train:
                 pred.append(output.max(1, keepdim=True)[1])
+                pred_probs.append(output.max(1, keepdim=True)[1])
+                output_without_else = torch.stack([i[:-1] for i in output])
+                if isinstance(leaf_node_results, int) and leaf_node_results == 0:
+                    leaf_node_results = output_without_else
+                else:
+                    leaf_node_results = torch.cat((leaf_node_results, output_without_else), dim=1)
 
             lbls = labels.clone()
             for l in range(len(lbls)):
@@ -1163,6 +1192,8 @@ def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, ar
         avg_loss += (sum(lss_list) / float(len(lss_list)))
 
         if not args.fast_train:
+            full_pred = leaf_node_results.max(1, keepdim=True)[1]
+            leaf_labels = [i for sub in leaf_node_labels for i in sub]  # Unite leaf labels in a list
             for i in range(labels.size(0)):
                 lbl = labels[i].item()
                 ln_index = -1
@@ -1176,9 +1207,20 @@ def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, ar
                     for j in range(len(models)):
                         if j != ln_index[0]:
                             if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
+                                if pred_probs[j][i] >= pred_probs[ln_index[0]][i]:
+                                    definite = False
                     if definite:
                         definite_correct += 1
+                elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                    all_else = True
+                    for j in range(len(leaf_node_labels)):
+                        if j != ln_index[0]:
+                            if pred[j][i] != len(leaf_node_labels[j]):
+                                all_else = False
+                                break
+                    if all_else:
+                        if lbl == leaf_labels[full_pred[i].item()]:
+                            definite_correct += 1
 
         if batch_idx % args.log_interval == 0:
             p_str = 'Train Epoch: {} [{}/{} ({:.0f}%)]'
@@ -1482,17 +1524,6 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
                             k = leaf_node_labels[j].index(lbl)
                             ln_index = (j, k)
                             break
-
-                    '''
-                    # Just for Storage Calculation
-                    all_models_used_count += 1
-                    for j in initial_model_indices:
-                        # if any prediction is made other than 'else', we count as 'initial models enough'
-                        if pred[j][i] != len(leaf_node_labels[j]):
-                            initial_models_enough_count += 1
-                            all_models_used_count -= 1
-                            break
-                    '''
 
                     correct = True
                     found = False
