@@ -130,7 +130,7 @@ def binarify_2d(arr):
     return arr
 
 
-def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True):
+def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True, print_types=False):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
@@ -146,7 +146,8 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
         print(user_types)
         np.save('user_types', user_types)
 
-    # print(user_types)
+    if print_types:
+        print(user_types)
 
     if not with_distribution:
         if load and load_gen_users and os.path.isfile('tree_gen_users.npy'):
@@ -197,7 +198,7 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
     return RootNode
 
 
-def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
+def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False, print_types=False):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
@@ -213,9 +214,11 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
         print(user_types)
         np.save('user_types', user_types)
     Z = linkage(user_types.T, 'ward')
-    '''
-    print(user_types)
 
+    if print_types:
+        print(user_types)
+
+    '''
     T = linkage(user_types.T, 'single')
     X = linkage(user_types.T, 'average')
     Y = linkage(user_types.T, 'weighted')
@@ -227,7 +230,7 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False):
     dendrogram(Z, ax=axes[3])
     plt.show()
     '''
-    # print(user_types)
+
     # dendrogram(Z)
     # plt.show()
 

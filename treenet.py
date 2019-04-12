@@ -2145,6 +2145,7 @@ def getArgs():
     parser.add_argument('-lsu', '--load-scenario-users', action='store_true', help='number of scenario test users')
     parser.add_argument('-nsd', '--scenario-data-length', type=int, default=1000, help='number of test images per scenario test users')
     parser.add_argument('-sufm', '--scenario-use-full-model', action='store_true', help='use full model in a miss situation')
+    parser.add_argument('-put', '--print-user-types', action='store_true', help='print user types')
     parser.add_argument('-ghfd', '--gen-from-dist', action='store_true', help='generate hierarchy from distribution instead of generated users')
     parser.add_argument('-ghnu', '--gen-from-new-users', action='store_false', help='do not load already generated users for generating hierarchy')
     parser.add_argument('-ghom', '--old-gen-method', action='store_true', help='generate hierarchy with the old method')
@@ -2293,9 +2294,9 @@ def main():
 
     if args.old_gen_method:
         print("Old Generating Method!")
-        root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load)
+        root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load, print_types=args.print_user_types)
     else:
-        root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users)
+        root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types)
     if args.test_scenario:
         test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
                                                    load=args.load_scenario_users)
