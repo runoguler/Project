@@ -776,10 +776,10 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
     avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
-        logging.info('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
+        logging.info('Test Scenario Average New Accuracy (Full Model): ({:.2f}%)'.format(avg_new_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
-    print('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
+    print('Test Scenario Average New Accuracy (Full Model): ({:.2f}%)'.format(avg_new_acc))
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
@@ -1269,6 +1269,19 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
                     definite_correct += 1
                 else:
                     indefinite_correct += 1
+            elif pred[ln_index[0]][i] == len(leaf_node_labels[ln_index[0]]):
+                all_else = True
+                for j in range(len(leaf_node_labels)):
+                    if j != ln_index[0]:
+                        if pred[j][i] != len(leaf_node_labels[j]):
+                            all_else = False
+                            wrong += 1
+                            break
+                if all_else:
+                    if lbl == leaf_labels[full_pred[i].item()]:
+                        definite_correct += 1
+                    else:
+                        wrong += 1
             else:
                 wrong += 1
 
@@ -1485,10 +1498,10 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
     avg_mem //= len(test_users)
     if args.log:
         logging.info('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
-        logging.info('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
+        logging.info('Test Scenario Average New Accuracy (Full Model): ({:.2f}%)'.format(avg_new_acc))
         logging.info('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
     print('Test Scenario Average Accuracy: ({:.2f}%)'.format(avg_acc))
-    print('Test Scenario Average New Accuracy: ({:.2f}%)'.format(avg_new_acc))
+    print('Test Scenario Average New Accuracy (Full Model): ({:.2f}%)'.format(avg_new_acc))
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
