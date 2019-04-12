@@ -2543,9 +2543,9 @@ def main():
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         for i in range(0, len(cfg), args.div_step):
             if isinstance(cfg[i], int):
-                cfg[i] = cfg[i] // args.div_factor
-            elif isinstance(cfg[i], tuple): (
-                cfg[i][0] // args.div_factor, cfg[i][1])
+                cfg[i] = int(cfg[i] // args.div_factor)
+            elif isinstance(cfg[i], tuple):
+                cfg[i] = (int(cfg[i][0] // args.div_factor), cfg[i][1])
         models = []
         for i in leaf_node_labels:
             branches = len(i) + 1
