@@ -539,11 +539,14 @@ def get_order_of_checking_extra_leaf_indices(initial_model_indices, leaf_node_in
         index = i
         while index:
             index = index + 1 if index % 2 == 1 else index - 1      # sibling index
-            if leaf_node_index.index(index) not in initial_model_indices:
-                if leaf_node_index.index(index) not in check_list and index in leaf_node_index:
-                    check_list.append(leaf_node_index.index(index))
-                else:
-                    add_deeper_leaves(check_list, index, leaf_node_index, models)
+            if index in leaf_node_index:
+                if leaf_node_index.index(index) not in initial_model_indices:
+                    if leaf_node_index.index(index) not in check_list and index in leaf_node_index:
+                        check_list.append(leaf_node_index.index(index))
+                    else:
+                        add_deeper_leaves(check_list, index, leaf_node_index, models)
+            else:
+                add_deeper_leaves(check_list, index, leaf_node_index, models)
             index = (index + 1) // 2 - 1        # parent index
 
         # Add remaining
