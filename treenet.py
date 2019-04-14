@@ -759,7 +759,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                                 initial_models_enough_count += 1
                             else:
                                 for j in check_list:
-                                    extra_used_indices.append(leaf_node_index[j])
+                                    extra_used_indices.append(j)
                                     if pred[j][i] != len(leaf_node_labels[j]):
                                         found = True
                                         if j == ln_index[0]:
