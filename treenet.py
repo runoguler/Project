@@ -759,7 +759,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
                                 initial_models_enough_count += 1
                             else:
                                 for j in check_list:
-                                    extra_used_indices.append(j)
+                                    extra_used_indices.append(leaf_node_index[j])
                                     if pred[j][i] != len(leaf_node_labels[j]):
                                         found = True
                                         if j == ln_index[0]:
@@ -795,11 +795,11 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         extra_storage = 0
         for i in range(len(extra_used_models)):
             extra_storage += initial_storage
-            extra_indices = [0]
+            extra_indices = []
             for j in range(len(extra_used_models[i])):
                 path = leaf_node_paths[extra_used_models[i][j]]
                 for k in path:
-                    if k not in extra_indices:
+                    if k not in extra_indices and k not in initial_indices:
                         extra_indices.append(k)
             for j in extra_indices:
                 extra_storage += no_of_params[j]
