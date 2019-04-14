@@ -1774,9 +1774,9 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
         if not isinstance(left, int):
             if left.count > 3 and lvl < level:
                 if model == 1:
-                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + step], in_planes=in_planes).to(device))
                 elif model == 2:
-                    models.append(VGG_Branch(cfg_full[conv_step:conv_step+3], in_channels=in_planes).to(device))
+                    models.append(VGG_Branch(cfg_full[conv_step:conv_step + step], in_channels=in_planes).to(device))
                 nodes.append((left, lvl))
                 remaining += 1
             else:
@@ -1801,9 +1801,9 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
         if not isinstance(right, int):
             if right.count > 3 and lvl < level:
                 if model == 1:
-                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + 3], in_planes=in_planes).to(device))
+                    models.append(MobileTreeBranchNet(input=cfg_full[conv_step:conv_step + step], in_planes=in_planes).to(device))
                 elif model == 2:
-                    models.append(VGG_Branch(cfg_full[conv_step:conv_step+3]).to(device))
+                    models.append(VGG_Branch(cfg_full[conv_step:conv_step + step], in_channels=in_planes).to(device))
                 nodes.append((right, lvl))
                 remaining += 1
             else:
@@ -1829,7 +1829,8 @@ def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step
         index += 1
         remaining -= 1
     for lbls in leaf_node_labels:
-        print(len(lbls))
+        print(len(lbls), end=' ')
+    print()
     print(cfg_full)
     if log:
         logging.info(cfg_full)
