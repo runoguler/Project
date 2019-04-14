@@ -780,7 +780,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(data_loader.sampler):
             storage_check = False
 
-        no_of_params = calculate_no_of_params_for_each(models)
+        no_of_params = calculate_no_of_params_for_tree(models)
 
         initial_indices = [0]
         for i in initial_model_indices:
@@ -1935,6 +1935,16 @@ def calculate_no_of_params_sum_each(models):
         if not model is None:
             length += sum(p.numel() for p in model.parameters())
     return length
+
+
+def calculate_no_of_params_for_tree(models):
+    no_of_params = []
+    for model in models:
+        if not model is None:
+            no_of_params.append(sum(p.numel() for p in model.parameters()))
+        else:
+            no_of_params.append(None)
+    return no_of_params
 
 
 def calculate_no_of_params_for_each(models):
