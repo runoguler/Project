@@ -2120,7 +2120,7 @@ def getArgs():
     epochs = 10
     lr = 0.001
     depth = 1
-    resize = 256
+    resize = 224
 
     parser = argparse.ArgumentParser(description="Parameters for training Tree-Net")
     parser.add_argument('-cf', '--cifar10', action='store_true', help='uses Cifar-10 dataset')
@@ -2310,7 +2310,10 @@ def main():
         print("Old Generating Method!")
         root_node = utils.generate_hierarchy_from_type_distribution(no_classes, n_type=args.num_user_types, load=load, print_types=args.print_user_types)
     else:
-        root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types)
+        if args.cifar10:
+            root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types)
+        else:
+            root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types, start=2, end_not_inc=20)
     if args.test_scenario:
         test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
                                                    load=args.load_scenario_users)

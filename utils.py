@@ -130,12 +130,13 @@ def binarify_2d(arr):
     return arr
 
 
-def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True, print_types=False):
+def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True, print_types=False, start=2, end_not_inc=4):
+    # all_classes_used_check = [False] * classes
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
     else:
-        num_pref = np.random.randint(2, 4, n_type)
+        num_pref = np.random.randint(start, end_not_inc, n_type)
         user_types = np.empty((0, classes), dtype=int)
         for i in range(n_type):
             preffed = np.random.choice(classes, num_pref[i], replace=False)
@@ -143,12 +144,21 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
             for j in preffed:
                 u_type[j] = 200
             user_types = np.vstack((user_types, u_type))
-        print(user_types)
         np.save('user_types', user_types)
 
     if print_types:
         print(user_types)
-
+    '''
+    for u in user_types:
+        for i in u:
+            if not all_classes_used_check[i] and i == 200:
+                all_classes_used_check[i] = True
+    # print(all_classes_used_check)
+    for boo in all_classes_used_check:
+        if not boo:
+            print('All classes not used')
+            break
+    '''
     if not with_distribution:
         if load and load_gen_users and os.path.isfile('tree_gen_users.npy'):
             all_users = np.load('tree_gen_users.npy')
@@ -159,7 +169,7 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
             all_users = []
             for user_type in user_types:
                 for _ in range(no_of_users_for_each_type):
-                    temp = [0] * 10
+                    temp = [0] * classes
                     sample = np.random.choice(len(user_type), sample_for_each_user, p=np.random.dirichlet(user_type, 1)[0])
                     for i in sample:
                         temp[i] += 1
@@ -198,12 +208,12 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
     return RootNode
 
 
-def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False, print_types=False):
+def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False, print_types=False, start=2, end_not_inc=4):
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
     else:
-        num_pref = np.random.randint(2, 4, n_type)
+        num_pref = np.random.randint(start, end_not_inc, n_type)
         user_types = np.empty((0, classes), dtype=int)
         for i in range(n_type):
             preffed = np.random.choice(classes, num_pref[i], replace=False)
@@ -316,13 +326,15 @@ def generate(classes, samples, load=False, prob=0.3):
 def main():
     np.set_printoptions(linewidth=320)
 
-    classes = 10
+    classes = 365
     samples = 200
 
-    root = generate_hierarchy_with_cooccurrence(classes, n_type=5, load=True)
+    root = generate_hierarchy_with_cooccurrence(classes, n_type=1000, load=False, load_gen_users=False, with_distribution=True, print_types=False, start=2, end_not_inc=365)
+    print(root.left.value)
+    print(root.right.value)
     #root = generate_hierarchy_from_type_distribution(classes, n_type=10, load=True)
-    print(root)
-    print(generate_users(10, 20, load=False))
+    # print(root)
+    # print(generate_users(10, 20, load=False))
     exit()
 
     # preference_table = generate_preference_table(classes, samples, prob=0.3)
