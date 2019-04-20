@@ -130,8 +130,8 @@ def binarify_2d(arr):
     return arr
 
 
-def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True, print_types=False, start=2, end_not_inc=4):
-    # all_classes_used_check = [False] * classes
+def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_distribution=False, load_gen_users=True, print_types=False, start=2, end_not_inc=4, draw=False):
+    all_classes_used_check = [False] * classes
     if load and os.path.isfile('user_types.npy'):
         user_types = np.load('user_types.npy')
         print("User Types Load Successful!")
@@ -148,23 +148,26 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
 
     if print_types:
         print(user_types)
-    '''
-    for u in user_types:
-        for i in u:
-            if not all_classes_used_check[i] and i == 200:
+
+    for type in user_types:
+        for i in range(len(type)):
+            if not all_classes_used_check[i] and type[i] == 200:
                 all_classes_used_check[i] = True
     # print(all_classes_used_check)
+    count = 0
     for boo in all_classes_used_check:
         if not boo:
-            print('All classes not used')
-            break
-    '''
+            count += 1
+    if count != 0:
+        print('All classes not used')
+        print('{} out of {} are still False'.format(count, len(all_classes_used_check)))
+
     if not with_distribution:
         if load and load_gen_users and os.path.isfile('tree_gen_users.npy'):
             all_users = np.load('tree_gen_users.npy')
             print("Generating Tree Users Load Successful!")
         else:
-            no_of_users_for_each_type = 20
+            no_of_users_for_each_type = 10
             sample_for_each_user = 100
             all_users = []
             for user_type in user_types:
@@ -190,8 +193,9 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
     p_dist = dist[i, j]
     Q = linkage(p_dist, 'ward', 'precomputed')
 
-    # dendrogram(Q)
-    # plt.show()
+    if draw:
+        dendrogram(Q)
+        plt.show()
 
     '''
     num_users_for_each_type = 10
@@ -329,12 +333,15 @@ def main():
     classes = 365
     samples = 200
 
-    root = generate_hierarchy_with_cooccurrence(classes, n_type=1000, load=False, load_gen_users=False, with_distribution=True, print_types=False, start=2, end_not_inc=365)
+    root = generate_hierarchy_with_cooccurrence(classes, n_type=100, load=True, load_gen_users=False, with_distribution=True, print_types=False, start=2, end_not_inc=21, draw=True)
+    print(len(root.left.value))
+    print(len(root.right.value))
     print(root.left.value)
     print(root.right.value)
     #root = generate_hierarchy_from_type_distribution(classes, n_type=10, load=True)
     # print(root)
-    # print(generate_users(10, 20, load=False))
+    test_users = generate_users(10, 20, load=False)
+    print(test_users)
     exit()
 
     # preference_table = generate_preference_table(classes, samples, prob=0.3)

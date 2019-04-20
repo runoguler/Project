@@ -2313,7 +2313,7 @@ def main():
         if args.cifar10:
             root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types)
         else:
-            root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types, start=2, end_not_inc=20)
+            root_node = utils.generate_hierarchy_with_cooccurrence(no_classes, n_type=args.num_user_types, load=load, with_distribution=args.gen_from_dist, load_gen_users=args.gen_from_new_users, print_types=args.print_user_types, start=2, end_not_inc=21)
     if args.test_scenario:
         test_scenario_users = utils.generate_users(args.num_scenario_users, args.scenario_data_length,
                                                    load=args.load_scenario_users)
