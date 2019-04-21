@@ -2543,7 +2543,10 @@ def main():
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
-        print(leaf_node_labels)
+        #print(leaf_node_labels)
+        for i in leaf_node_labels:
+            print(len(i), end=" ")
+        print()
         if args.log and not args.limit_log:
             logging.info("Mobile Tree Net Old") if modelno == 1 else logging.info("VGG Tree Net")
             if fine_tune:
