@@ -153,14 +153,12 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
         for i in range(len(type)):
             if not all_classes_used_check[i] and type[i] == 200:
                 all_classes_used_check[i] = True
-    # print(all_classes_used_check)
     count = 0
     for boo in all_classes_used_check:
         if not boo:
             count += 1
     if count != 0:
-        print('All classes not used')
-        print('{} out of {} are still False'.format(count, len(all_classes_used_check)))
+        print('{} out of {} are not used'.format(count, len(all_classes_used_check)))
 
     if not with_distribution:
         if load and load_gen_users and os.path.isfile('tree_gen_users.npy'):
