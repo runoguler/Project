@@ -167,15 +167,15 @@ def generate_hierarchy_with_cooccurrence(classes, n_type=10, load=False, with_di
             all_users = np.load('tree_gen_users.npy')
             print("Generating Tree Users Load Successful!")
         else:
-            no_of_users_for_each_type = 10
-            sample_for_each_user = 100
+            no_of_users_for_each_type = 50
+            sample_for_each_user = 250
             all_users = []
             for user_type in user_types:
                 for _ in range(no_of_users_for_each_type):
                     temp = [0] * classes
                     sample = np.random.choice(len(user_type), sample_for_each_user, p=np.random.dirichlet(user_type, 1)[0])
                     for i in sample:
-                        temp[i] += 1
+                        temp[i] = 1
                     all_users.append(temp)
             all_users = np.array(all_users, dtype=int)
             np.save('tree_gen_users', all_users)
@@ -260,6 +260,14 @@ def generate_users(num_users, num_samples, load=False):
     user_types = np.load('user_types.npy')
     test_user_types = np.random.randint(len(user_types), size=num_users)
     #print(test_user_types)
+    '''
+    for i in test_user_types:
+        temp = []
+        for j in range(len(user_types[i])):
+            if user_types[i][j] == 200:
+                temp.append(j)
+        print(temp)
+    '''
     test_users = np.empty((0, num_samples), dtype=int)
     for user_type in test_user_types:
         test = np.random.choice(len(user_types[user_type]), num_samples, p=np.random.dirichlet(user_types[user_type], 1)[0])
