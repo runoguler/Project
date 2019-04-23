@@ -217,7 +217,7 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                     concat_results = torch.cat((concat_results, output_without_else), dim=1)
 
             l = losses[i](result, lbls)
-            l.backward(retain_graph=True)
+            l.backward()
             optims[i].step()
             losses_to_print.append(l.item())
 
