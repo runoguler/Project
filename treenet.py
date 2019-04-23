@@ -2691,6 +2691,7 @@ def main():
                 cfg[i] = int(cfg[i] // args.div_factor)
             elif isinstance(cfg[i], tuple):
                 cfg[i] = (int(cfg[i][0] // args.div_factor), cfg[i][1])
+        print(cfg)
         models = []
         for i in leaf_node_labels:
             branches = len(i) + 1
