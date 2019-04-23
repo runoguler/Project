@@ -2543,7 +2543,7 @@ def main():
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
-        #print(leaf_node_labels)
+        print(leaf_node_labels)
         for i in leaf_node_labels:
             print(len(i), end=" ")
         print()
@@ -2683,6 +2683,9 @@ def main():
         # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         print(leaf_node_labels)
+        for i in leaf_node_labels:
+            print(len(i), end=" ")
+        print()
         for i in range(0, len(cfg), args.div_step):
             if isinstance(cfg[i], int):
                 cfg[i] = int(cfg[i] // args.div_factor)
@@ -2692,7 +2695,7 @@ def main():
         for i in leaf_node_labels:
             branches = len(i) + 1
             if args.parallel_mobile_nets:
-                models.append(MobileNet(num_classes=branches, channels=cfg, fcl=(int((fcl_factor*fcl_factor*1024) // args.div_factor))).to(device))
+                models.append(MobileNet(num_classes=branches, channels=cfg, fcl=(int((fcl_factor*fcl_factor*cfg[-1])))).to(device))
             elif args.parallel_vgg:
                 models.append(VGG16(num_classes=branches, cfg=cfg, fcl=(int((fcl_factor*fcl_factor*512) // args.div_factor))).to(device))
         if args.log:
