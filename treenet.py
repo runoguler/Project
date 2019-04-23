@@ -201,16 +201,16 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
                 else:
                     lbls[l] = len(leaf_node_labels[i])
 
-            layer = models[0](data)
+            result = models[0](data)
             for j in range(len(leaf_node_paths[i]) - 1):
                 k = leaf_node_paths[i][j]
-                layer = models[k](layer)
+                result = models[k](result)
             k = leaf_node_index[i]
-            result = models[k](layer)
+            result = models[k](result)
             if not args.fast_train:
                 pred.append(result.max(1, keepdim=True)[1])
                 pred_probs.append(result.max(1, keepdim=True)[0])
-                output_without_else = torch.stack([i[:-1] for i in result])
+                output_without_else = torch.stack([j[:-1] for j in result])
                 if isinstance(concat_results, int) and concat_results == 0:
                     concat_results = output_without_else
                 else:
