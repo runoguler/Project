@@ -1653,7 +1653,7 @@ def getArgs():
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
     parser.add_argument('-sr', '--root-step', type=int, default=3, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
-    parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
+    parser.add_argument('-ni', '--not-involve', type=int, default=0, help='number of last layers not involved in reducing the number of channels')
     parser.add_argument('-df', '--div-factor', type=float, default=1.4142, help='dividing factor in networks')
     parser.add_argument('-ds', '--div-step', type=int, default=1, help='dividing factor in networks')
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
