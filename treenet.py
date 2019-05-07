@@ -13,24 +13,14 @@ from models.mobilenet import MobileNet
 from models.vgg import VGG16
 from models.mobile_tree_net import MobileTreeRootNet, MobileTreeLeafNet, MobileTreeBranchNet
 from models.vgg_tree_net import VGG_Branch, VGG_Leaf
-import torchvision.models as Models
 
 import utils
 import os
 
-class_labels = [89, 168, 203, 244, 254, 268, 284, 298, 320, 321]
 best_acc = 0
-vis = 0
 
 
-def map_labels(labels):
-    lbls = labels.clone()
-    for i in range(len(lbls)):
-        lbls[i] = class_labels.index(lbls[i].item())
-    return lbls
-
-
-def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
 
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -134,9 +124,6 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom:
-        vis.plot_loss(avg_loss, epoch, name='train_loss')
-        vis.plot_acc(acc, epoch, name='train_acc')
     if args.log:
         logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             avg_loss, definite_correct, len(train_loader.sampler), acc))
@@ -144,7 +131,7 @@ def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_
             avg_loss, definite_correct, len(train_loader.sampler), acc))
 
 
-def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
+def train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     leaf_node_index = []
     leaf_node_paths = []
 
@@ -184,8 +171,6 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
     avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
 
         pred = []
         pred_probs = []
@@ -271,9 +256,6 @@ def train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, 
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom:
-        vis.plot_loss(avg_loss, epoch, name='train_loss')
-        vis.plot_acc(acc, epoch, name='train_acc')
 
     if args.log:
         logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
@@ -387,8 +369,6 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
     avg_loss = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
 
         pred = []
         pred_probs = []
@@ -494,9 +474,6 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
         print("Model Saved!")
 
     avg_loss /= len(test_loader)
-    if args.visdom:
-        vis.plot_loss(avg_loss, epoch, name='val_loss')
-        vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
         logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}'.format(
@@ -780,7 +757,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
         if initial_models_enough_count + all_models_used_count + len(extra_used_models) != len(data_loader.sampler):
             storage_check = False
 
-        no_of_params = calculate_no_of_params_for_tree(models)
+        no_of_params = calculate_no_of_params_for_each(models)
 
         initial_indices = [0]
         for i in initial_model_indices:
@@ -804,7 +781,7 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
             for j in extra_indices:
                 extra_storage += no_of_params[j]
 
-        storage = ((all_models_used_count * calculate_no_of_params_sum_each(models)) + (initial_storage * initial_models_enough_count) + extra_storage) / len(each_user)
+        storage = ((all_models_used_count * calculate_no_of_params(models)) + (initial_storage * initial_models_enough_count) + extra_storage) / len(each_user)
 
         acc = 100. * definite_correct / len(data_loader.sampler)
         new_acc = 100. * new_corrects / len(data_loader.sampler)
@@ -829,158 +806,6 @@ def test_tree_scenario(models, leaf_node_labels, test_users, class_indices, data
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
-def test_tree_personal(models, leaf_node_labels, test_loader, device, args, preferences):
-    leaf_node_index = []
-    leaf_node_paths = []  # NOT INCLUDING models[0]
-
-    for i in range(len(models)):
-        if not models[i] is None:
-            models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
-                leaf_node_index.append(i)
-
-    for i in leaf_node_index:
-        path = []
-        while i > 0:
-            path = [i] + path
-            i = (i + 1) // 2 - 1
-        leaf_node_paths.append(path)
-
-    correct = 0
-    wrong = 0
-
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
-
-        pred = []   # indices are predictions(vector(size of a single batch)) for each leaf (Note that: None for the leaves not used)
-        used_ln_indexes = []    #used paths indexed from left to right in order
-        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-            if not any(elem in leaf_node_labels[i] for elem in preferences):
-                pred.append(None)
-                continue
-            used_ln_indexes.append(i)
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j + 1 == len(leaf_node_paths[i]):
-                    result = models[k](layer)
-                    pred.append(result.max(1, keepdim=True)[1])
-                else:
-                    layer = models[k](layer)
-
-        for i in range(len(labels)):
-            lbl = labels[i].item()
-            ln_index = -1
-            for j in range(len(leaf_node_labels)):
-                if lbl in leaf_node_labels[j]:
-                    k = leaf_node_labels[j].index(lbl)
-                    ln_index = (j, k)
-                    break
-            if ln_index[0] not in used_ln_indexes:
-                definite = True
-                for j in range(len(leaf_node_index)):
-                    if j in used_ln_indexes:
-                        if pred[j][i] != len(leaf_node_labels[j]):
-                            definite = False
-                if definite:
-                    correct += 1
-                else:
-                    wrong += 1
-            else:
-                if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in preferences) and pred[ln_index[0]][i] not in preferences):
-                    definite = True
-                    for j in range(len(leaf_node_index)):
-                        if j in used_ln_indexes and j != ln_index[0]:
-                            if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
-                    if definite:
-                        correct += 1
-                    else:
-                        wrong += 1
-                else:
-                    wrong += 1
-
-    if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
-            correct, len(test_loader.sampler),
-            100. * correct / len(test_loader.sampler)
-        ))
-    print('\nTest set: Accuracy: {}/{} ({:.2f}%)\n'.format(
-        correct, len(test_loader.sampler),
-        100. * correct / len(test_loader.sampler)
-    ))
-
-
-def test_tree_all_preferences(models, leaf_node_labels, test_loader, device, args, all_prefs):
-    leaf_node_index = []
-    leaf_node_paths = []  # NOT INCLUDING models[0]
-
-    for i in range(len(models)):
-        if not models[i] is None:
-            models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
-                leaf_node_index.append(i)
-
-    for i in leaf_node_index:
-        path = []
-        while i > 0:
-            path = [i] + path
-            i = (i + 1) // 2 - 1
-        leaf_node_paths.append(path)
-
-    corrects = [0] * len(all_prefs)
-
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
-
-        pred = []
-        for i in range(len(leaf_node_paths)):  # for every branch(path) going to a leaf node
-            layer = models[0](data)
-            for j in range(len(leaf_node_paths[i])):
-                k = leaf_node_paths[i][j]
-                if j + 1 == len(leaf_node_paths[i]):
-                    result = models[k](layer)
-                    pred.append(result.max(1, keepdim=True)[1])
-                else:
-                    layer = models[k](layer)
-
-        for p, single_pref in enumerate(all_prefs):
-            correct = 0
-
-            for i in range(len(labels)):
-                lbl = labels[i].item()
-                is_correct = True
-                for j, single_leaf_labels in enumerate(leaf_node_labels):
-                    if any(elem in single_leaf_labels for elem in single_pref):
-                        if lbl in single_pref:
-                            if lbl in single_leaf_labels:
-                                if not pred[j][i] == single_leaf_labels.index(lbl):
-                                    is_correct = False
-                            else:
-                                if (not pred[j][i] == len(single_leaf_labels)) and (single_leaf_labels[pred[j][i]] in single_pref):
-                                    is_correct = False
-                        else:
-                            if (not pred[j][i] == len(single_leaf_labels)) and (single_leaf_labels[pred[j][i]] in single_pref):
-                                is_correct = False
-                if is_correct:
-                    correct += 1
-
-            corrects[p] += correct
-
-    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
-    avg_acc = sum(accuracies)/float(len(accuracies))
-
-    if args.log:
-        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
-
-    print(accuracies)
-    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
-
-
 def train_net(model, train_loader, device, epoch, args, save_name="net"):
     model.train()
     loss = torch.nn.CrossEntropyLoss()
@@ -995,8 +820,6 @@ def train_net(model, train_loader, device, epoch, args, save_name="net"):
     correct = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
 
         optim.zero_grad()
         output = model(data)
@@ -1020,9 +843,6 @@ def train_net(model, train_loader, device, epoch, args, save_name="net"):
         saveModel(model, acc, epoch, './saved/' + save_name + '.pth')
         print("Model Saved!")
 
-    if args.visdom:
-        vis.plot_loss(losses, epoch, name='train_loss')
-        vis.plot_acc(acc, epoch, name='train_acc')
     if args.log:
         logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             losses, correct, len(train_loader.sampler), acc))
@@ -1040,8 +860,6 @@ def test_net(model, test_loader, device, args, epoch=0, save_name="net"):
     correct = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
         output = model(data)
         test_loss += loss(output, labels).item()
         pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
@@ -1054,9 +872,6 @@ def test_net(model, test_loader, device, args, epoch=0, save_name="net"):
         saveModel(model, acc, epoch, './saved/' + save_name + '.pth')
         print("Model Saved!")
 
-    if args.visdom:
-        vis.plot_loss(test_loss, epoch, name='val_loss')
-        vis.plot_acc(acc, epoch, name='val_acc')
     if args.log:
         logging.info('Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
             test_loss, correct, len(test_loader.sampler), acc))
@@ -1105,41 +920,6 @@ def test_net_scenario(model, test_users, class_indices, data_transform, device, 
     print('Test Scenario Average Accuracy: ({:.2f}%), Storage: {}'.format(avg_acc, num_params))
 
 
-def test_net_all_preferences(model, test_loader, device, args, all_prefs):
-    model.eval()
-
-    corrects = [0] * len(all_prefs)
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
-
-        output = model(data)
-        pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
-
-        for p, single_pref in enumerate(all_prefs):
-            correct = 0
-            for i in range(len(labels)):
-                lbl = labels[i].item()
-                if lbl in single_pref:
-                    if pred[i] == lbl:
-                        correct += 1
-                else:
-                    if pred[i] not in single_pref:
-                        correct += 1
-
-            corrects[p] += correct
-
-    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
-    avg_acc = sum(accuracies) / float(len(accuracies))
-
-    if args.log:
-        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
-
-    print(accuracies)
-    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
-
-
 def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda):
     optims = []
     FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -1161,8 +941,6 @@ def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, ar
     avg_loss = 0
     for batch_idx, (data, labels) in enumerate(train_loader):
         data, labels = data.to(device), labels.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
 
         lss_list = []
         pred = []
@@ -1241,9 +1019,6 @@ def train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, ar
         print("Model Saved!")
 
     avg_loss /= len(train_loader)
-    if args.visdom:
-        vis.plot_loss(avg_loss, epoch, name='train_loss')
-        vis.plot_acc(acc, epoch, name='train_acc')
 
     if args.log:
         logging.info('Train set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)'.format(
@@ -1264,8 +1039,6 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
     avg_loss = 0
     for data, label in test_loader:
         data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
 
         pred = []
         pred_probs = []
@@ -1360,9 +1133,6 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
             saveModel(models[i], acc, epoch, './saved/parallel_net' + str(i) + '.pth')
 
     avg_loss /= len(test_loader)
-    if args.visdom:
-        vis.plot_loss(avg_loss, epoch, name='val_loss')
-        vis.plot_acc(acc, epoch, name='val_acc')
 
     if args.log:
         logging.info('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}'.format(
@@ -1619,120 +1389,6 @@ def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, 
     print('Test Scenario Average Memory: {}/{}'.format(avg_mem, model_size))
 
 
-def test_parallel_personal(models, leaf_node_labels, test_loader, device, args, preferences):
-    for model in models:
-        model.eval()
-
-    correct = 0
-    wrong = 0
-
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
-
-        pred = []
-        used_ln_index = []
-        for i in range(len(models)):
-            if not any(elem in leaf_node_labels[i] for elem in preferences):
-                pred.append(None)
-            else:
-                used_ln_index.append(i)
-                output = models[i](data)
-                pred.append(output.max(1, keepdim=True)[1])
-
-        for i in range(len(labels)):
-            lbl = labels[i].item()
-            ln_index = -1
-            for j in range(len(leaf_node_labels)):
-                if lbl in leaf_node_labels[j]:
-                    k = leaf_node_labels[j].index(lbl)
-                    ln_index = (j, k)
-                    break
-            if ln_index[0] not in used_ln_index:
-                definite = True
-                for j in range(len(leaf_node_labels)):
-                    if j in used_ln_index:
-                        if pred[j][i] != len(leaf_node_labels[j]):
-                            definite = False
-                if definite:
-                    correct += 1
-                else:
-                    wrong += 1
-            else:
-                if pred[ln_index[0]][i] == ln_index[1] or ((lbl not in preferences) and pred[ln_index[0]][i] not in preferences):
-                    definite = True
-                    for j in range(len(leaf_node_labels)):
-                        if j in used_ln_index and j != ln_index[0]:
-                            if pred[j][i] != len(leaf_node_labels[j]):
-                                definite = False
-                    if definite:
-                        correct += 1
-                    else:
-                        wrong += 1
-                else:
-                    wrong += 1
-    if args.log:
-        logging.info('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
-        correct, len(test_loader.sampler),
-        100. * correct / len(test_loader.sampler)
-        ))
-    print('Test set: Accuracy: {}/{} ({:.2f}%)'.format(
-        correct, len(test_loader.sampler),
-        100. * correct / len(test_loader.sampler)
-    ))
-
-
-def test_parallel_all_preferences(models, leaf_node_labels, test_loader, device, args, all_prefs):
-    for model in models:
-        model.eval()
-
-    corrects = [0] * len(all_prefs)
-    for data, label in test_loader:
-        data, labels = data.to(device), label.to(device)
-        if args.use_classes:
-            labels = map_labels(labels).to(device)
-
-        pred = []
-        for i in range(len(models)):
-            output = models[i](data)
-            pred.append(output.max(1, keepdim=True)[1])
-
-        for p, single_pref in enumerate(all_prefs):
-            correct = 0
-            for i in range(len(labels)):
-                lbl = labels[i].item()
-
-                is_correct = True
-                for j, single_leaf_labels in enumerate(leaf_node_labels):
-                    if any(elem in single_leaf_labels for elem in single_pref):
-                        if lbl in single_pref:
-                            if lbl in single_leaf_labels:
-                                if not pred[j][i] == single_leaf_labels.index(lbl):
-                                    is_correct = False
-                            else:
-                                if (not pred[j][i] == len(single_leaf_labels)) and (
-                                        single_leaf_labels[pred[j][i]] in single_pref):
-                                    is_correct = False
-                        else:
-                            if (not pred[j][i] == len(single_leaf_labels)) and (
-                                    single_leaf_labels[pred[j][i]] in single_pref):
-                                is_correct = False
-                if is_correct:
-                    correct += 1
-
-            corrects[p] += correct
-
-    accuracies = [100. * c / len(test_loader.sampler) for c in corrects]
-    avg_acc = sum(accuracies) / float(len(accuracies))
-
-    if args.log:
-        logging.info('Test set: Accuracy: {:.2f}%'.format(avg_acc))
-
-    print(accuracies)
-    print('\nTest set: Accuracy: {:.2f}%\n'.format(avg_acc))
-
-
 def generate_model_list(root_node, level, device, fcl_factor, model=1, root_step=3, step=3, dividing_factor=2, dividing_step= 2, not_involve=1, log=False):
     ### Model: 1 -- MobileNet V1
     ### Model: 2 -- VGG_16_BN
@@ -1898,53 +1554,24 @@ def calculate_all_indices(data, train_or_val):
     return indices
 
 
-def load_class_indices(data, no_classes, train_or_val, classes=None):
+def load_class_indices(data, no_classes, train_or_val):
     indices = []
     if train_or_val == 0:
         if os.path.isfile('all_train_indices.npy'):
             all_indices = np.load('all_train_indices.npy')
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-        if classes is None:
-            for i in range(no_classes):
-                indices += all_indices[i]
-        else:
-            for i in range(len(classes)):
-                indices += all_indices[classes[i]]
+        for i in range(no_classes):
+            indices += all_indices[i]
     elif train_or_val == 1:
         if os.path.isfile('all_val_indices.npy'):
             all_indices = np.load('all_val_indices.npy')
-            if classes is None:
-                indices = all_indices[:no_classes].reshape(-1)
-            else:
-                indices = all_indices[classes].reshape(-1)
+            indices = all_indices[:no_classes].reshape(-1)
         else:
             all_indices = calculate_all_indices(data, train_or_val)
-            if classes is None:
-                for i in range(no_classes):
-                    indices += all_indices[i]
-            else:
-                for i in range(len(classes)):
-                    indices += all_indices[classes[i]]
+            for i in range(no_classes):
+                indices += all_indices[i]
     return indices
-
-
-def calculate_no_of_params_sum_each(models):
-    length = 0
-    for model in models:
-        if not model is None:
-            length += sum(p.numel() for p in model.parameters())
-    return length
-
-
-def calculate_no_of_params_for_tree(models):
-    no_of_params = []
-    for model in models:
-        if not model is None:
-            no_of_params.append(sum(p.numel() for p in model.parameters()))
-        else:
-            no_of_params.append(None)
-    return no_of_params
 
 
 def calculate_no_of_params_for_each(models):
@@ -1952,6 +1579,8 @@ def calculate_no_of_params_for_each(models):
     for model in models:
         if not model is None:
             no_of_params.append(sum(p.numel() for p in model.parameters()))
+        else:
+            no_of_params.append(None)
     return no_of_params
 
 
@@ -1966,151 +1595,12 @@ def calculate_no_of_params(models):
     return length
 
 
-def calculate_no_of_params_in_detail(models, more_detail=False):
-    length = 0
-    if isinstance(models, list):
-        convs, bns, linears = 0, 0, 0
-        for model in models:
-            if not model is None:
-                conv, bn, linear = 0, 0, 0
-                if more_detail:
-                    if isinstance(model, MobileTreeRootNet):
-                        print("Root:")
-                    elif isinstance(model, MobileTreeBranchNet):
-                        print("Branch:")
-                    elif isinstance(model, MobileTreeLeafNet):
-                        print("Leaf:")
-                for name, p in model.named_parameters():
-                    np = p.numel()
-                    if "conv" in name:
-                        conv += np
-                        convs += np
-                    elif "bn" in name:
-                        bn += np
-                        bns += np
-                    else:
-                        linear += np
-                        linears += np
-                length += sum(p.numel() for p in model.parameters())
-                if more_detail:
-                    print('Conv:\t' + str(conv))
-                    print('Bn: \t' + str(bn))
-                    print('Fcl:\t' + str(linear))
-                    print('Total:\t' + str(conv + bn + linear))
-                    print()
-    else:
-        convs, bns, linears = 0, 0, 0
-        for name, p in models.named_parameters():
-            if "conv" in name:
-                convs += p.numel()
-            elif "bn" in name:
-                bns += p.numel()
-            else:
-                linears += p.numel()
-        length = sum(p.numel() for p in models.parameters())
-    return convs, bns, linears, length
-
-
-def calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, log):
-    params_of_model = [0] * len(models)
-
-    leaf_node_index = []
-    leaf_node_paths = []
-    for i in range(len(models)):
-        if not models[i] is None:
-            params_of_model[i] = sum(p.numel() for p in models[i].parameters())
-            models[i].eval()
-            if isinstance(models[i], MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
-                leaf_node_index.append(i)
-    for i in leaf_node_index:
-        path = []
-        while i > 0:
-            path = [i] + path
-            i = (i + 1) // 2 - 1
-        leaf_node_paths.append(path)
-
-    no_params = [0] * len(all_prefs)
-    for p, single_pref in enumerate(all_prefs):
-        models_to_include = [False] * len(models)
-        for i in range(len(leaf_node_labels)):
-            if any(elem in leaf_node_labels[i] for elem in single_pref):
-                models_to_include[0] = True
-                for j in leaf_node_paths[i]:
-                    models_to_include[j] = True
-        params = 0
-        for i in range(len(models_to_include)):
-            if models_to_include[i]:
-                params += params_of_model[i]
-        no_params[p] = params
-
-    avg_no_params = sum(no_params) / float(len(no_params))
-
-    print(no_params)
-    print("\nAvg # of Params: " + str(avg_no_params))
-
-    if log:
-        logging.info("Avg # of Params: " + str(avg_no_params))
-
-    return avg_no_params
-
-
-def calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, log):
-    params_of_model = [0] * len(models)
-
-    for i in range(len(models)):
-        if not models[i] is None:
-            params_of_model[i] = sum(p.numel() for p in models[i].parameters())
-
-    no_params = [0] * len(all_prefs)
-    for p, single_pref in enumerate(all_prefs):
-        models_to_include = [False] * len(models)
-        for i in range(len(leaf_node_labels)):
-            if any(elem in leaf_node_labels[i] for elem in single_pref):
-                models_to_include[i] = True
-        params = 0
-        for i in range(len(models_to_include)):
-            if models_to_include[i]:
-                params += params_of_model[i]
-        no_params[p] = params
-
-    avg_no_params = sum(no_params) / float(len(no_params))
-
-    print(no_params)
-    print("\nAvg # of Params: " + str(avg_no_params))
-
-    if log:
-        logging.info("Avg # of Params: " + str(avg_no_params))
-
-    return avg_no_params
-
-
-def pref_table_to_all_prefs(preference_table):
-    all_prefs = []
-    for i in range(len(preference_table)):
-        all_prefs.append([])
-        for j in range(len(preference_table[i])):
-            if preference_table[i][j] == 1:
-                all_prefs[i].append(j)
-    return all_prefs
-
-
 def saveModel(model, acc, epoch, path='./saved/mobilenet.pth'):
-    if vis != 0:
-        state = {
-            'model': model.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-            'vis': True,
-            'vis-win-loss': vis.win_loss,
-            'vis-win-acc': vis.win_acc
-        }
-    else:
-        state = {
-            'model': model.state_dict(),
-            'acc': acc,
-            'epoch': epoch,
-            'vis': False
-        }
+    state = {
+        'model': model.state_dict(),
+        'acc': acc,
+        'epoch': epoch
+    }
     torch.save(state, path)
 
 
@@ -2127,7 +1617,6 @@ def getArgs():
     parser.add_argument('-cf2', '--cifar100', action='store_true', help='uses Cifar-100 dataset')
     parser.add_argument('-t', '--test', action='store_true', help='enables test mode')
     parser.add_argument('-jt', '--just-train', action='store_true', help='train only without testing')
-    parser.add_argument('-tp', '--test-prefs', action='store_true', help='do not test for all preferences while training')
     parser.add_argument('-ts', '--test-scenario', action='store_true', help='scenario test')
     parser.add_argument('-r', '--resume', action='store_true', help='whether to resume training or not (default: 0)')
     parser.add_argument('-f', '--fine-tune', action='store_true', help='fine-tune optimization')
@@ -2135,14 +1624,12 @@ def getArgs():
     parser.add_argument('-l', '--log', action='store_true', help='log the events')
     parser.add_argument('-ll', '--limit-log', action='store_true', help='do not log initial logs')
     parser.add_argument('-ft', '--fast-train', action='store_true', help='does not calculate unnecessary things')
-    parser.add_argument('-nw', '--no-weights', action='store_false', help='train without class weights')
     parser.add_argument('-rs', '--resize', type=int, default=resize, help='resize images in the dataset (default: 256)')
-    parser.add_argument('-p', '--prefs', nargs='+', type=int)
     parser.add_argument('-m', '--model', type=int, default=0, choices=[0, 1, 2], help='choose models')
     parser.add_argument('-mp', '--parallel-mobile-nets', action='store_true', help='train parallel-mobile-net')
     parser.add_argument('-vp', '--parallel-vgg', action='store_true', help='train parallel-vgg-net')
-    parser.add_argument('-mtn', '--mobile-tree-net', action='store_true', help='train mobile-tree-net')
-    parser.add_argument('-mt', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net-old')
+    parser.add_argument('-mtn', '--mobile-tree-net-old', action='store_true', help='train mobile-tree-net')
+    parser.add_argument('-mt', '--mobile-tree-net', action='store_true', help='train mobile-tree-net-old')
     parser.add_argument('-vt', '--vgg-tree', action='store_true', help='train vgg-tree')
     parser.add_argument('-d', '--depth', type=int, default=depth, help='depth of the tree (default: 1)')
     parser.add_argument('-b', '--batch-size', type=int, default=batch_size, help='input batch size for training (default: 64)')
@@ -2150,10 +1637,9 @@ def getArgs():
     parser.add_argument('-e', '--epochs', type=int, default=epochs, help='number of epochs to train (default: 10)')
     parser.add_argument('-lr', '--lr', type=float, default=lr, help='learning rate (default: 0.001)')
     parser.add_argument('-cw', '--num-workers', type=int, default=0, help='number of workers for cuda')
+    parser.add_argument('-nw', '--no-weights', action='store_false', help='train without class weights')
     parser.add_argument('-w', '--weight-mult', type=float, default=1.0, help='class weight multiplier')
-    parser.add_argument('-pp', '--pref-prob', type=float, default=0.3, help='class weight multiplier')
     parser.add_argument('-nc', '--num-classes', type=int, default=365, help='train for only first n classes (default: 365)')
-    parser.add_argument('-sm', '--samples', type=int, default=1000, help='number of preferences in the preference table')
     parser.add_argument('-nut', '--num-user-types', type=int, default=10, help='number of scenario user types')
     parser.add_argument('-nsu', '--num-scenario-users', type=int, default=100, help='number of scenario test users')
     parser.add_argument('-lsu', '--load-scenario-users', action='store_true', help='number of scenario test users')
@@ -2164,22 +1650,15 @@ def getArgs():
     parser.add_argument('-ghnu', '--gen-from-new-users', action='store_false', help='do not load already generated users for generating hierarchy')
     parser.add_argument('-ghom', '--old-gen-method', action='store_true', help='generate hierarchy with the old method')
     parser.add_argument('-cp', '--calc-params', action='store_true', help='enable calculating parameters of the model')
-    parser.add_argument('-cs', '--calc-storage', action='store_true', help='enable calculating storage of the models for all preferences')
     parser.add_argument('-li', '--log-interval', type=int, default=100, help='how many batches to wait before logging training status (default: 100)')
-    parser.add_argument('-uc', '--use-classes', action='store_true', help='use specific classes')
     parser.add_argument('-sr', '--root-step', type=int, default=3, help='number of root steps')
     parser.add_argument('-sc', '--conv-step', type=int, default=3, help='number of conv steps')
     parser.add_argument('-ni', '--not-involve', type=int, default=1, help='number of last layers not involved in reducing the number of channels')
     parser.add_argument('-df', '--div-factor', type=float, default=1.4142, help='dividing factor in networks')
     parser.add_argument('-ds', '--div-step', type=int, default=1, help='dividing factor in networks')
-    parser.add_argument('-ls', '--lr-scheduler', action='store_true', help='enables lr scheduler')
-    parser.add_argument('-lrg', '--lr-gamma', type=float, default=0.1, help='gamma of lr scheduler')
-    parser.add_argument('-lrs', '--lr-step', type=int, default=30, help='steps of lr scheduler')
     parser.add_argument('-adm', '--adam', action='store_true', help='choose adam optimizer instead of sgd')
-    parser.add_argument('-vis', '--visdom', action='store_true', help='use visdom to plot graphs')
     parser.add_argument('-val', '--val-mode', action='store_true', help='saves the best accuracy model in each test')
     parser.add_argument('-da', '--data-aug', type=int, default=1, choices=[1, 2, 3], help='choose the data augmentation')
-    parser.add_argument('-pre', '--pre-trained', action='store_true', help='saves the best accuracy model in each test')
     parser.add_argument('-mgpu', '--multi-gpu', action='store_true', help='enable using multiple gpu')
     args = parser.parse_args()
     return args
@@ -2189,26 +1668,17 @@ def main():
     global best_acc
     args = getArgs()
 
-    if args.visdom:
-        global vis
-        vis = utils.Visualizations()
-
     test = args.test
     resume = args.resume
     same = args.same
     fine_tune = args.fine_tune
     load = resume or test or same or fine_tune
-    prefs = args.prefs
-    test_prefs = args.test_prefs
 
     last_epoch = 0
 
     no_classes = args.num_classes
     if args.cifar10 and no_classes > 10:
         no_classes = 10
-    samples = args.samples
-    if no_classes != 365 and samples == 1000:
-        samples = no_classes * 5
 
     if args.log:
         start_time = time.time()
@@ -2295,12 +1765,8 @@ def main():
             train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size, shuffle=True, **cuda_args)
             val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size, shuffle=False, **cuda_args)
         else:
-            if args.use_classes:
-                train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0, classes=class_labels)
-                val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1, classes=class_labels)
-            else:
-                train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
-                val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
+            train_indices = load_class_indices(places_training_data, no_classes, train_or_val=0)
+            val_indices = load_class_indices(places_validation_data, no_classes, train_or_val=1)
             train_loader = torch.utils.data.DataLoader(places_training_data, batch_size=args.batch_size,
                                                        sampler=SubsetRandomSampler(train_indices), **cuda_args)
             val_loader = torch.utils.data.DataLoader(places_validation_data, batch_size=args.test_batch_size,
@@ -2375,9 +1841,6 @@ def main():
                 model.load_state_dict(state['model'])
                 best_acc = state['acc']
                 last_epoch = state['epoch']
-                if state['vis']:
-                    vis.win_acc = state['vis-win-acc']
-                    vis.win_loss = state['vis-win-loss']
             args.epochs += last_epoch
             for epoch in range(last_epoch + 1, args.epochs + 1):
                 if args.just_train:
@@ -2385,24 +1848,15 @@ def main():
                 else:
                     train_net(model, train_loader, device, epoch, args, save_name)
                     test_net(model, val_loader, device, args, epoch, save_name)
-                    if test_prefs:
-                        preference_table = np.load('preference_table.npy')
-                        all_prefs = pref_table_to_all_prefs(preference_table.T)
-                        test_net_all_preferences(model, val_loader, device, args, all_prefs)
         else:
             state = torch.load('./saved/' + save_name + '.pth')
             model.load_state_dict(state['model'])
             best_acc = state['acc']
             test_net(model, val_loader, device, args, save_name=save_name)
-            if test_prefs:
-                preference_table = np.load('preference_table.npy')
-                all_prefs = pref_table_to_all_prefs(preference_table.T)
-                test_net_all_preferences(model, val_loader, device, args, all_prefs)
             if args.test_scenario:
                 test_net_scenario(model, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
-    elif args.mobile_tree_net:
+    elif args.mobile_tree_net_old:
         print("Mobile Tree Net")
-        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=1,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -2427,47 +1881,19 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(resize))
             logging.info("Number of Classes: " + str(no_classes))
-            if prefs:
-                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         elif args.log:
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
-            if prefs:
-                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            if prefs:
-                pref_models = []
-                in_ln_index = []
-                j = 0
-                for i, model in enumerate(models):
-                    if isinstance(model, MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
-                        if any(elem in leaf_node_labels[j] for elem in prefs):
-                            in_ln_index.append(i)
-                        j += 1
-                for i, model in enumerate(models):
-                    if not model is None:
-                        if i == 0:
-                            pref_models.append(model)
-                        for k in in_ln_index:
-                            while k > 0:
-                                if k == i:
-                                    pref_models.append(model)
-                                k = (k + 1) // 2 - 1
-                no_params = calculate_no_of_params(pref_models)
-                no_params_all = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-            else:
-                no_params = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params))
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if fine_tune:
                 for i in range(len(models)):
@@ -2476,17 +1902,10 @@ def main():
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
                         last_epoch = state['epoch']
-                        if state['vis']:
-                            vis.win_acc = state['vis-win-acc']
-                            vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
-                    if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                    else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                    test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
             else:
                 if resume:
                     for i in range(len(models)):
@@ -2495,51 +1914,27 @@ def main():
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
                             last_epoch = state['epoch']
-                            if state['vis']:
-                                vis.win_acc = state['vis-win-acc']
-                                vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
                     if args.just_train:
-                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     else:
-                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                        if prefs is None:
-                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            if test_prefs:
-                                preference_table = np.load('preference_table.npy')
-                                all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
-                                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                                if args.calc_storage:
-                                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
-                        else:
-                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
         else:
             for i in range(len(models)):
                 if not models[i] is None:
                     state = torch.load('./saved/treemodel' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
-            if prefs is None:
-                test_tree(models, leaf_node_labels, val_loader, device, args)
-                if test_prefs:
-                    preference_table = np.load('preference_table.npy')
-                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                    test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                    if args.calc_storage:
-                        calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
-            else:
-                test_tree(models, leaf_node_labels, val_loader, device, args)
-                test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
-    elif args.mobile_tree_net_old or args.vgg_tree:
+            test_tree(models, leaf_node_labels, val_loader, device, args)
+    elif args.mobile_tree_net or args.vgg_tree:
         if args.mobile_tree_net_old:
             print("Mobile Tree Net Old")
             modelno = 1
         else:
             print("VGG Tree Net")
             modelno = 2
-        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         models, leaf_node_labels = generate_model_list(root_node, args.depth, device, fcl_factor, model=modelno,
                                                        root_step=args.root_step, step=args.conv_step, dividing_factor=args.div_factor, dividing_step=args.div_step,
                                                        not_involve=args.not_involve, log=(args.log and not args.limit_log))
@@ -2568,47 +1963,19 @@ def main():
             logging.info("Batch Size: " + str(args.batch_size))
             logging.info("Size of Images: " + str(resize))
             logging.info("Number of Classes: " + str(no_classes))
-            if prefs:
-                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         elif args.log:
             logging.info("Learning Rate: " + str(args.lr))
             logging.info("Epochs: " + str(args.epochs))
             logging.info("Batch Size: " + str(args.batch_size))
-            if prefs:
-                logging.info("Pref Classes: " + str(prefs))
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            if prefs:
-                pref_models = []
-                in_ln_index = []
-                j = 0
-                for i, model in enumerate(models):
-                    if isinstance(model, MobileTreeLeafNet) or isinstance(models[i], VGG_Leaf):
-                        if any(elem in leaf_node_labels[j] for elem in prefs):
-                            in_ln_index.append(i)
-                        j += 1
-                for i, model in enumerate(models):
-                    if not model is None:
-                        if i == 0:
-                            pref_models.append(model)
-                        for k in in_ln_index:
-                            while k > 0:
-                                if k == i:
-                                    pref_models.append(model)
-                                k = (k + 1) // 2 - 1
-                no_params = calculate_no_of_params(pref_models)
-                no_params_all = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-            else:
-                no_params = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params))
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if fine_tune:
                 for i in range(len(models)):
@@ -2617,17 +1984,10 @@ def main():
                         models[i].load_state_dict(state['model'])
                         best_acc = state['acc']
                         last_epoch = state['epoch']
-                        if state['vis']:
-                            vis.win_acc = state['vis-win-acc']
-                            vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
                     train_hierarchical(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda, args.depth, args.depth)
-                    if prefs is None:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                    else:
-                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                        test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                    test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
             else:
                 if resume:
                     for i in range(len(models)):
@@ -2636,43 +1996,20 @@ def main():
                             models[i].load_state_dict(state['model'])
                             best_acc = state['acc']
                             last_epoch = state['epoch']
-                            if state['vis']:
-                                vis.win_acc = state['vis-win-acc']
-                                vis.win_loss = state['vis-win-loss']
                 args.epochs += last_epoch
                 for epoch in range(last_epoch + 1, args.epochs + 1):
                     if args.just_train:
-                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                     else:
-                        train_tree_old(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                        if prefs is None:
-                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            if test_prefs:
-                                preference_table = np.load('preference_table.npy')
-                                all_prefs = pref_table_to_all_prefs(preference_table.T)     #change binary table to list of labels
-                                test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                                if args.calc_storage:
-                                    calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
-                        else:
-                            test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
-                            test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                        train_tree(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
+                        test_tree(models, leaf_node_labels, val_loader, device, args, epoch)
         else:
             for i in range(len(models)):
                 if not models[i] is None:
                     state = torch.load('./saved/treemodel' + str(i) + '.pth')
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
-            if prefs is None:
-                test_tree(models, leaf_node_labels, val_loader, device, args)
-                if test_prefs:
-                    preference_table = np.load('preference_table.npy')
-                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                    test_tree_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                    if args.calc_storage:
-                        calculate_params_all_preferences_tree(models, all_prefs, leaf_node_labels, args.log)
-            else:
-                test_tree(models, leaf_node_labels, val_loader, device, args)
-                test_tree_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+            test_tree(models, leaf_node_labels, val_loader, device, args)
             if args.test_scenario:
                 test_tree_scenario(models, leaf_node_labels, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
     elif args.parallel_mobile_nets or args.parallel_vgg:
@@ -2680,7 +2017,6 @@ def main():
             cfg = [64, (128, 2), 128, (256, 2), 256, (512, 2), 512, 512, 512, 512, 512, (1024, 2), 1024]
         elif args.parallel_vgg:
             cfg = [64, 64, 'M', 128, 128, 'M', 256, 256, 256, 'M', 512, 512, 512, 'M', 512, 512, 512, 'M']
-        # root_node = utils.generate(no_classes, samples, load, prob=args.pref_prob)
         leaf_node_labels = find_leaf_node_labels(root_node, args.depth)
         print(leaf_node_labels)
         for i in leaf_node_labels:
@@ -2724,21 +2060,10 @@ def main():
             if args.weight_mult != 1.0:
                 logging.info("Weight factor: " + str(args.weight_mult))
         if args.calc_params:
-            if prefs:
-                pref_models = []
-                for i, model in enumerate(models):
-                    if any(elem in leaf_node_labels[i] for elem in prefs):
-                        pref_models.append(model)
-                no_params = calculate_no_of_params(pref_models)
-                no_params_all = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params) + " / " + str(no_params_all))
-            else:
-                no_params = calculate_no_of_params(models)
-                print("Number of Parameters: " + str(no_params))
-                if args.log:
-                    logging.info("Number of Parameters: " + str(no_params))
+            no_params = calculate_no_of_params(models)
+            print("Number of Parameters: " + str(no_params))
+            if args.log:
+                logging.info("Number of Parameters: " + str(no_params))
         if not test:
             if resume:
                 for i in range(len(models)):
@@ -2746,42 +2071,19 @@ def main():
                     models[i].load_state_dict(state['model'])
                     best_acc = state['acc']
                     last_epoch = state['epoch']
-                    if state['vis']:
-                        vis.win_acc = state['vis-win-acc']
-                        vis.win_loss = state['vis-win-loss']
             args.epochs += last_epoch
             for epoch in range(last_epoch + 1, args.epochs + 1):
                 if args.just_train:
                     train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
                 else:
                     train_parallel_net(models, leaf_node_labels, train_loader, device, epoch, args, use_cuda)
-                    if prefs is None:
-                        test_parallel_net(models, leaf_node_labels, val_loader, device, args, epoch)
-                        if test_prefs:
-                            preference_table = np.load('preference_table.npy')
-                            all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                            test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                            if args.calc_storage:
-                                calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
-                    else:
-                        test_parallel_net(models, leaf_node_labels, val_loader, device, args, epoch)
-                        test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+                    test_parallel_net(models, leaf_node_labels, val_loader, device, args, epoch)
         else:
             for i in range(len(models)):
                 state = torch.load('./saved/parallel_net' + str(i) + '.pth')
                 models[i].load_state_dict(state['model'])
                 best_acc = state['acc']
-            if prefs is None:
-                test_parallel_net(models, leaf_node_labels, val_loader, device, args)
-                if test_prefs:
-                    preference_table = np.load('preference_table.npy')
-                    all_prefs = pref_table_to_all_prefs(preference_table.T)  # change binary table to list of labels
-                    test_parallel_all_preferences(models, leaf_node_labels, val_loader, device, args, all_prefs)
-                    if args.calc_storage:
-                        calculate_params_all_preferences_parallel(models, all_prefs, leaf_node_labels, args.log)
-            else:
-                test_parallel_net(models, leaf_node_labels, val_loader, device, args)
-                test_parallel_personal(models, leaf_node_labels, val_loader, device, args, prefs)
+            test_parallel_net(models, leaf_node_labels, val_loader, device, args)
             if args.test_scenario:
                 test_parallel_scenario(models, leaf_node_labels, test_scenario_users, class_indices, val_data_transform, device, args, cuda_args)
 

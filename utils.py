@@ -2,15 +2,12 @@ import numpy as np
 import os
 from scipy.cluster.hierarchy import linkage, dendrogram, cophenet
 from scipy.spatial.distance import pdist
-from sklearn.cluster import AgglomerativeClustering
-import visdom
 
 import matplotlib
 matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
 
 from torch.utils.data.sampler import Sampler
-import torch
 
 
 class TreeNode():
@@ -47,44 +44,6 @@ class TreeNode():
         return str(self.value)
 
 
-class Visualizations:
-    def __init__(self, env_name='main'):
-        self.env_name = env_name
-        self.vis = visdom.Visdom(env=self.env_name)
-        self.win_loss = None
-        self.win_acc = None
-
-    def plot_loss(self, data, step, name='init', xlabel='Epochs', ylabel='Loss', new_plot=False):
-        if new_plot:
-            self.win_loss = None
-        self.win_loss = self.vis.line(
-            [data],
-            [step],
-            win=self.win_loss,
-            name=name,
-            update='append' if self.win_loss else None,
-            opts=dict(
-                xlabel=xlabel,
-                ylabel=ylabel
-            )
-        )
-
-    def plot_acc(self, data, step, name='init', xlabel='Epochs', ylabel='Accuracy', new_plot=False):
-        if new_plot:
-            self.win_acc = None
-        self.win_acc = self.vis.line(
-            [data],
-            [step],
-            win=self.win_acc,
-            name=name,
-            update='append' if self.win_acc else None,
-            opts=dict(
-                xlabel=xlabel,
-                ylabel=ylabel
-            )
-        )
-
-
 class IndexSampler(Sampler):
     def __init__(self, indices):
         super().__init__(indices)
@@ -95,32 +54,6 @@ class IndexSampler(Sampler):
 
     def __len__(self):
         return len(self.indices)
-
-
-def generate_preference_table(classes, samples, prob=0.3):
-    return np.random.choice(2, (classes, samples), p=[(1-prob), prob])
-
-
-def generate_preference_table_new(classes, samples, n_type=10, load_types=True, load_preferences=False):
-    if load_preferences:
-        return np.load('preference_table.npy')
-    if load_types:
-        user_types = np.load('user_types.npy')
-    else:
-        user_types = np.empty((0, classes))
-        for _ in range(n_type):
-            rands = np.random.random(classes)
-            # rands /= rands.sum()
-            user_types = np.vstack((user_types, rands))
-
-        np.save('user_types', user_types)
-
-    selected_types = np.random.randint(0, len(user_types), samples)
-
-    preferences = np.empty((0, classes), dtype=int)
-    for type_index in selected_types:
-        preferences = np.vstack((preferences, np.random.binomial(1, user_types[type_index], classes)))
-    return preferences.T
 
 
 def binarify_2d(arr):
@@ -230,19 +163,6 @@ def generate_hierarchy_from_type_distribution(classes, n_type=10, load=False, pr
     if print_types:
         print(user_types)
 
-    '''
-    T = linkage(user_types.T, 'single')
-    X = linkage(user_types.T, 'average')
-    Y = linkage(user_types.T, 'weighted')
-    Z = linkage(user_types.T, 'ward')
-    fig, axes = plt.subplots(1, 4, figsize=(16, 3))
-    dendrogram(T, ax=axes[0])
-    dendrogram(X, ax=axes[1])
-    dendrogram(Y, ax=axes[2])
-    dendrogram(Z, ax=axes[3])
-    plt.show()
-    '''
-
     # dendrogram(Z)
     # plt.show()
 
@@ -284,26 +204,6 @@ def generate_users_memoryless(num_users, num_samples, seed=123123):
         yield test_user
 
 
-def simplify_linkage(Z, classes):
-    clusters = []
-    last_2 = 0
-    for i in range(len(Z)):
-        if Z[i][1] < classes:
-            clusters.append((int(Z[i][0]), int(Z[i][1])))
-            last_2 = (int(Z[i][0]), int(Z[i][1]))
-        else:
-            if Z[i][0] >= classes:
-                index_0 = int(Z[i][0] - classes)
-                index_1 = int(Z[i][1] - classes)
-                clusters.append((clusters[index_0] + clusters[index_1]))
-                last_2 = (clusters[index_0],clusters[index_1])
-            else:
-                index = int(Z[i][1] - classes)
-                clusters.append((clusters[index] + (int(Z[i][0]),)))
-                last_2 = (clusters[index],(int(Z[i][0])))
-    return clusters, last_2
-
-
 def linkage_to_tree(Z, classes):
     nodes = []
     for i in range(len(Z)):
@@ -318,19 +218,6 @@ def linkage_to_tree(Z, classes):
                 index = int(Z[i][1] - classes)
                 nodes.append(TreeNode((nodes[index].value + (int(Z[i][0]),)), nodes[index], int(Z[i][0]), nodes[index].depth, -1))
     return nodes[-1]
-
-
-def generate(classes, samples, load=False, prob=0.3):
-    if load:
-        preference_table = np.load('preference_table.npy')
-    else:
-        preference_table = generate_preference_table(classes, samples, prob)
-        np.save('preference_table', preference_table)
-
-    Z = linkage(preference_table, 'ward')
-    RootNode = linkage_to_tree(Z, classes)
-
-    return RootNode
 
 
 def main():
@@ -348,28 +235,6 @@ def main():
     # print(root)
     test_users = generate_users(10, 20, load=False)
     print(test_users)
-    exit()
-
-    # preference_table = generate_preference_table(classes, samples, prob=0.3)
-    preference_table = generate_preference_table_new(classes, samples, load_types=True, load_preferences=True)
-
-    np.save('preference_table', preference_table)
-    print('Preference Table: \n', preference_table)
-    print('Correlations: \n', np.corrcoef(preference_table))
-
-    Z = linkage(preference_table, 'ward')
-    RootNode = linkage_to_tree(Z, classes)
-    c, coph_dists = cophenet(Z, pdist(preference_table))
-    print('Linkage: \n', Z)
-    print('Root Node: \n', RootNode)
-    # print('Root Node contd: \n', RootNode.left, RootNode.right, RootNode.left.left, RootNode.left.right, RootNode.right.left, RootNode.right.right)
-    print('Cophenetic Correlation Coefficient: ', c)
-
-    plt.title('Hierarchical Clustering Dendrogram')
-    plt.xlabel('sample index')
-    plt.ylabel('distance')
-    dendrogram(Z)
-    plt.show()
 
 
 if __name__ == '__main__':
