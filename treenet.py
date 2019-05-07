@@ -482,12 +482,17 @@ def test_tree(models, leaf_node_labels, test_loader, device, args, epoch=0):
             definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
         logging.info('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
+    print('\nTest set: Average loss: {:.4f}\tAccuracy: {}/{} ({:.2f}%)\n'.format(
+        avg_loss, definite_correct, len(test_loader.sampler), acc
+    ))
+    '''
     print('\nTest set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
     print('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
+    '''
 
 
 def add_deeper_leaves(check_list, index, leaf_node_index, models):
@@ -1141,12 +1146,17 @@ def test_parallel_net(models, leaf_node_labels, test_loader, device, args, epoch
         definite_correct, len(test_loader.sampler), acc, avg_loss
         ))
         logging.info('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
+    print('\nTest set: Average loss: {:.4f}\tAccuracy: {}/{} ({:.2f}%)\n'.format(
+        avg_loss, definite_correct, len(test_loader.sampler), acc
+    ))
+    '''
     print('Test set: Accuracy: {}/{} ({:.2f}%)\tDefinite Corrects: {}/{} ({:.2f}%)\tAvg loss: {:.4f}\n'.format(
         (definite_correct + indefinite_correct), len(test_loader.sampler),
         100. * (definite_correct + indefinite_correct) / len(test_loader.sampler),
         definite_correct, len(test_loader.sampler), acc, avg_loss
     ))
     print('Test set: New Accuracy: {}/{} ({:.2f}%)'.format(new_corrects, len(test_loader.sampler), new_acc))
+    '''
 
 
 def test_parallel_scenario(models, leaf_node_labels, test_users, class_indices, data_transform, device, args, cuda_args):
