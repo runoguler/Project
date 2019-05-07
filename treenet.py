@@ -1929,7 +1929,7 @@ def main():
                     best_acc = state['acc']
             test_tree(models, leaf_node_labels, val_loader, device, args)
     elif args.mobile_tree_net or args.vgg_tree:
-        if args.mobile_tree_net_old:
+        if args.mobile_tree_net:
             print("Mobile Tree Net Old")
             modelno = 1
         else:
