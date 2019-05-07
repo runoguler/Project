@@ -223,10 +223,12 @@ def linkage_to_tree(Z, classes):
 def main():
     np.set_printoptions(linewidth=320)
 
-    classes = 365
-    samples = 200
+    classes = 10
+    num_user_types = 10
+    start, end = 2, 4
+    from_distribution = True
 
-    root = generate_hierarchy_with_cooccurrence(classes, n_type=100, load=True, load_gen_users=False, with_distribution=True, print_types=False, start=2, end_not_inc=21, draw=True)
+    root = generate_hierarchy_with_cooccurrence(classes, n_type=num_user_types, load=False, load_gen_users=False, with_distribution=from_distribution, print_types=False, start=start, end_not_inc=end, draw=True)
     print(len(root.left.value))
     print(len(root.right.value))
     print(root.left.value)
